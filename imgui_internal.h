@@ -4172,6 +4172,11 @@ namespace ImGui
     IMGUI_API void          SetNextItemRefVal(ImGuiDataType data_type, void* p_data);
     inline bool             IsItemActiveAsInputText() { ImGuiContext& g = *GImGui; return g.ActiveId != 0 && g.ActiveId == g.LastItemData.ID && g.InputTextState.ID == g.LastItemData.ID; } // This may be useful to apply workaround that a based on distinguish whenever an item is active as a text input field.
 
+    // BEGIN DALAMUD CUSTOM
+    IMGUI_API void Custom_StbTextMakeUndoReplace(ImGuiInputTextState* str, int where, int old_length, int new_length);
+    IMGUI_API void Custom_StbTextUndo(ImGuiInputTextState* str);
+    // END DALAMUD CUSTOM
+
     // Color
     IMGUI_API void          ColorTooltip(const char* text, const float* col, ImGuiColorEditFlags flags);
     IMGUI_API void          ColorEditOptionsPopup(const float* col, ImGuiColorEditFlags flags);
