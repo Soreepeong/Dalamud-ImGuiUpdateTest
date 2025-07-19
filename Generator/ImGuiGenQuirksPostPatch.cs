@@ -6,7 +6,7 @@
 
     public class ImGuiGenQuirksPostPatch : PostPatch
     {
-        private const string ImGuiOutputPath = "../../../../Hexa.NET.ImGui/Generated/";
+        private const string ImGuiOutputPath = "../../../../../../imgui/Dalamud.Bindings.ImGui/Generated";
 
         public override void Apply(PatchContext context, CsCodeGeneratorMetadata metadata, List<string> files)
         {

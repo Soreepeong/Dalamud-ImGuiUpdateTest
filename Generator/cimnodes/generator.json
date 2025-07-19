@@ -2,7 +2,7 @@
   "BaseConfig": {
     "Url": "file://config.base.json"
   },
-  "Namespace": "Hexa.NET.ImNodes",
+  "Namespace": "Dalamud.Bindings.ImNodes",
   "ApiName": "ImNodes",
   "LibName": "cimnodes",
   "KnownDefaultValueNames": {
@@ -10,5 +10,5 @@
     "ImNodesPinShape_CircleFilled": "ImNodesPinShape.CircleFilled"
   },
   "IgnoredParts": [ "ImNodes", "Imnodes", "imnodes" ],
-  "Usings": [ "Hexa.NET.ImGui" ]
+  "Usings": [ "Dalamud.Bindings.ImGui" ]
 }

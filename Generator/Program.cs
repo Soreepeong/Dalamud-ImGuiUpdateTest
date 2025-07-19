@@ -6,10 +6,10 @@ var builder =
     .WithArgs(args)
     .AddImGui()
     .AddImPlot()
-    .AddImNodes()
+    //.AddImNodes()
     .AddImGuizmo()
-    .AddImPlot3D()
-    .AddImGuiBackends()
+    //.AddImPlot3D()
+    //.AddImGuiBackends()
     .AddImGuiNodeEditor(false);
 
 var context = builder.Build();

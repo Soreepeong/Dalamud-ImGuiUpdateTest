@@ -3,7 +3,7 @@
     "Url": "file://config.base.json",
     "IgnoredProperties": [ "IgnoredFunctions" ]
   },
-  "Namespace": "Hexa.NET.ImGui",
+  "Namespace": "Dalamud.Bindings.ImGui",
   "ApiName": "ImGui",
   "LibName": "cimgui",
   "GenerateConstants": false,

@@ -100,6 +100,7 @@ namespace Generator
             }
 
             JObject typedefsJson;
+            Console.WriteLine("Loading typedefs from: " + Path.Combine(directory, "typedefs_dict.json"));
             using (StreamReader fs = File.OpenText(Path.Combine(directory, "typedefs_dict.json")))
             using (JsonTextReader jr = new(fs))
             {

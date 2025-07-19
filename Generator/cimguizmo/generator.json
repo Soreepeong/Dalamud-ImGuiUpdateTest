@@ -2,7 +2,7 @@
   "BaseConfig": {
     "Url": "file://config.base.json"
   },
-  "Namespace": "Hexa.NET.ImGuizmo",
+  "Namespace": "Dalamud.Bindings.ImGuizmo",
   "ApiName": "ImGuizmo",
   "LibName": "cimguizmo",
   "IgnoredParts": [ "ImGuizmo" ],
@@ -11,5 +11,5 @@
     "MODE": "ImGuizmoMode",
     "COLOR": "ImGuizmoColor"
   },
-  "Usings": [ "Hexa.NET.ImGui" ]
+  "Usings": [ "Dalamud.Bindings.ImGui" ]
 }

@@ -28,8 +28,8 @@
             config.Defines.Add("CIMGUI_DEFINE_ENUMS_AND_STRUCTS");
             LogLevel = HexaGen.Core.Logging.LogSeverity.Error;
 
-            Environment.SetEnvironmentVariable("VCINSTALLDIR", @"C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.36.32532");
-            Environment.SetEnvironmentVariable("VCToolsInstallDir", @"C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.36.32532\");
+            Environment.SetEnvironmentVariable("VCINSTALLDIR", @"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.36.32532");
+            Environment.SetEnvironmentVariable("VCToolsInstallDir", @"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.36.32532\");
         }
 
         public override bool GenerateCore(CppCompilation compilation, List<string> headerFiles, string outputPath, List<string>? allowedHeaders = null)

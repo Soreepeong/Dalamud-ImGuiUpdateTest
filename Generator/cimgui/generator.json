@@ -2,7 +2,7 @@
   "BaseConfig": {
     "Url": "file://config.base.json"
   },
-  "Namespace": "Hexa.NET.ImGui",
+  "Namespace": "Dalamud.Bindings.ImGui",
   "ApiName": "ImGui",
   "LibName": "cimgui"
 }

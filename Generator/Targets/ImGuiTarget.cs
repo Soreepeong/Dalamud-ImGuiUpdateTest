@@ -16,7 +16,7 @@
     {
         private const string CImGuiConfig = "cimgui/generator.json";
         private const string CImGuiHeader = "cimgui/cimgui.h";
-        private const string ImGuiOutputPath = "../../../../Hexa.NET.ImGui/Generated";
+        private const string ImGuiOutputPath = "../../../../../../imgui/Dalamud.Bindings.ImGui/Generated";
 
         public override string Name { get; } = "imgui";
 

@@ -14,10 +14,10 @@
         private const string CImGuiManualConfig = "cimgui/generator.manual.json";
 
         private const string CImGuiInternalsConfig = "cimgui/generator.internals.json";
-        private const string ImGuiInternalsOutputPath = "../../../../Hexa.NET.ImGui/Internals";
+        private const string ImGuiInternalsOutputPath = "../../../../../../imgui/Dalamud.Bindings.ImGui/Internals";
 
-        private const string ImGuiManualOutputPath = "../../../../Hexa.NET.ImGui/Manual/";
-        private const string ImGuiOutputPath = "../../../../Hexa.NET.ImGui/Generated/";
+        private const string ImGuiManualOutputPath = "../../../../../../imgui/Dalamud.Bindings.ImGui/Manual/";
+        private const string ImGuiOutputPath = "../../../../../../imgui/Dalamud.Bindings.ImGui/Generated";
 
         public override void Apply(PatchContext context, CsCodeGeneratorMetadata metadata, List<string> files)
         {

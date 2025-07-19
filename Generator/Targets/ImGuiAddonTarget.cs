@@ -29,10 +29,10 @@
         private const string CImPlotHeader = "cimplot/cimplot.h";
         private const string CImPlot3DHeader = "cimplot3d/cimplot3d.h";
 
-        private const string ImGuizmoOutputPath = "../../../../Hexa.NET.ImGuizmo/Generated";
-        private const string ImNodesOutputPath = "../../../../Hexa.NET.ImNodes/Generated";
-        private const string ImPlotOutputPath = "../../../../Hexa.NET.ImPlot/Generated";
-        private const string ImPlot3DOutputPath = "../../../../Hexa.NET.ImPlot3D/Generated";
+        private const string ImGuizmoOutputPath = "../../../../../../imgui/Dalamud.Bindings.ImGuizmo/Generated";
+        private const string ImNodesOutputPath = "../../../../../../imgui/Dalamud.Bindings.ImNodes/Generated";
+        private const string ImPlotOutputPath = "../../../../../../imgui/Dalamud.Bindings.ImPlot/Generated";
+        private const string ImPlot3DOutputPath = "../../../../../../imgui/Dalamud.Bindings.ImPlot3D/Generated";
 
         public static BuildSystemBuilder AddImGuizmo(this BuildSystemBuilder builder, string configPath = CImGuizmoConfig, string outputPath = ImGuizmoOutputPath)
         {
