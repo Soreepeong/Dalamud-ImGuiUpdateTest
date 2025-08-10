@@ -7737,7 +7737,9 @@ void ImGui::RenderWindowDecorations(ImGuiWindow* window, const ImRect& title_bar
                     is_docking_transparent_payload = true;
 
             ImU32 bg_col = GetColorU32(GetWindowBgColorIdx(window));
-            if (window->ViewportOwned)
+            // BEGIN DALAMUD CUSTOM
+            if (window->ViewportOwned && false)
+            // END DALAMUD CUSTOM
             {
                 bg_col |= IM_COL32_A_MASK; // No alpha
                 if (is_docking_transparent_payload)
