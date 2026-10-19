@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-using Dalamud.Bindings.ImGui;
 using Dalamud.Configuration.Internal;
 using Dalamud.Data;
 using Dalamud.Game;
@@ -180,23 +179,6 @@ internal sealed partial class FontAtlasFactory
         bool isGlobalScaled = true,
         LocalPlugin? ownerPlugin = null) =>
         new DalamudFontAtlas(this, atlasName, autoRebuildMode, isGlobalScaled, ownerPlugin);
-
-    /// <summary>
-    /// Adds the font from Dalamud Assets.
-    /// </summary>
-    /// <param name="toolkitPreBuild">The toolkitPostBuild.</param>
-    /// <param name="asset">The font.</param>
-    /// <param name="fontConfig">The font config.</param>
-    /// <returns>The address and size.</returns>
-    public ImFontPtr AddFont(
-        IFontAtlasBuildToolkitPreBuild toolkitPreBuild,
-        DalamudAsset asset,
-        in SafeFontConfig fontConfig) =>
-        toolkitPreBuild.AddFontFromStream(
-            this.dalamudAssetManager.CreateStream(asset),
-            fontConfig,
-            false,
-            $"Asset({asset})");
 
     /// <summary>
     /// Gets the <see cref="FdtReader"/> for the <see cref="GameFontFamilyAndSize"/>.

@@ -89,17 +89,7 @@ public static class FontAtlasBuildToolkitUtilities
     /// <param name="toolkit">The toolkit.</param>
     /// <param name="fontPtr">The font.</param>
     /// <returns>The relevant config pointer, or empty config pointer if not found.</returns>
-    public static unsafe ImFontConfigPtr FindConfigPtr(this IFontAtlasBuildToolkit toolkit, ImFontPtr fontPtr)
-    {
-        for (var i = 0; i < toolkit.NewImAtlas.ConfigData.Size; i++)
-        {
-            var c = toolkit.NewImAtlas.ConfigData[i];
-            if (c.DstFont == fontPtr.Handle)
-                return new((ImFontConfig*)Unsafe.AsPointer(ref c));
-        }
-
-        return default;
-    }
+    public static ImFontConfigPtr FindConfigPtr(this IFontAtlasBuildToolkit toolkit, ImFontPtr fontPtr) => default;
 
     /// <summary>
     /// Invokes <paramref name="action"/>
