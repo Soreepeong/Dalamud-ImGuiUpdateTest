@@ -3589,6 +3589,11 @@ local function location(file,locpathT,defines,COMPILER,keepemptylines)
 					end
                 end
 				
+				-- cl /d1PP keeps multi-line #define bodies; skip their continuation lines
+				while line and line:match("\\%s*$") do
+					line = file:read"*l"
+					if in_location then loc_num_incr = loc_num_incr + 1 end
+				end
             elseif in_location then
                 local loc_num_real = loc_num + loc_num_incr
                 loc_num_incr = loc_num_incr + 1
