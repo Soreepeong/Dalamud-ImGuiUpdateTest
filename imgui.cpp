@@ -2620,7 +2620,7 @@ ImGuiID ImHashData(const void* data_p, size_t data_size, ImGuiID seed)
 #else
         ImU32 v;
         memcpy(&v, data, sizeof(ImU32)); // Avoid aliasing violation (#9557)
-        crc = _mm_crc32_u32(crc, v); 
+        crc = _mm_crc32_u32(crc, v);
 #endif
         data += 4;
     }
