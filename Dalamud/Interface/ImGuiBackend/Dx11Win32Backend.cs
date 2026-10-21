@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Bindings.ImGuizmo;
 using Dalamud.Bindings.ImPlot;
+using Dalamud.Interface.Fonts.Internal;
 using Dalamud.Interface.ImGuiBackend.Delegates;
 using Dalamud.Interface.ImGuiBackend.Helpers;
 using Dalamud.Interface.ImGuiBackend.InputHandler;
@@ -65,6 +66,7 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
             this.WindowHandle = desc.OutputWindow;
 
             var ctx = ImGui.CreateContext();
+            TextLayouter.Install();
             ImGuizmo.SetImGuiContext(ctx);
             ImPlot.SetImGuiContext(ctx);
             ImPlot.CreateContext();
@@ -160,6 +162,7 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
         this.NewInputFrame?.Invoke();
 
         ImGui.NewFrame();
+        ImGui.ShrinkTextStyleStack(0);
         ImGuizmo.BeginFrame();
 
         this.BuildUi?.Invoke();
@@ -182,9 +185,6 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
         this.targetWidth = newWidth;
         this.targetHeight = newHeight;
     }
-
-    /// <inheritdoc/>
-    public void InvalidateFonts() => this.imguiRenderer.RebuildFontTexture();
 
     /// <inheritdoc/>
     public bool IsImGuiCursor(nint cursorHandle) => this.imguiInput.IsImGuiCursor(cursorHandle);
@@ -235,6 +235,7 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
         this.imguiRenderer?.Dispose();
         this.imguiInput?.Dispose();
 
+        GlyphAtlas.DisposeShared();
         ImPlot.DestroyContext();
         ImGui.DestroyContext();
 

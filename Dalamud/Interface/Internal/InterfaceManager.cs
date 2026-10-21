@@ -118,7 +118,7 @@ internal partial class InterfaceManager : IInternalDisposableService
     private ReShadeAddonInterface? reShadeAddonInterface;
 
     private IFontAtlas? dalamudAtlas;
-    private ILockedImFont? defaultFontResourceLock;
+    private LockedImFont? defaultFontResourceLock;
 
     // can't access imgui IO before first present call
     private HWND gameWindowHandle;
@@ -172,28 +172,28 @@ internal partial class InterfaceManager : IInternalDisposableService
     /// <strong>Accessing this static property outside of the main thread is dangerous and not supported.</strong>
     /// </summary>
     public static ImFontPtr DefaultFont =>
-        WhenFontsReady().DefaultFontHandle!.LockUntilPostFrame().OrElse(ImGui.GetIO().FontDefault);
+        WhenFontsReady().DefaultFontHandle!.Font;
 
     /// <summary>
     /// Gets an included FontAwesome icon font.<br />
     /// <strong>Accessing this static property outside of the main thread is dangerous and not supported.</strong>
     /// </summary>
     public static ImFontPtr IconFont =>
-        WhenFontsReady().IconFontHandle!.LockUntilPostFrame().OrElse(ImGui.GetIO().FontDefault);
+        WhenFontsReady().IconFontHandle!.Font;
 
     /// <summary>
     /// Gets an included FontAwesome icon font with fixed width.
     /// <strong>Accessing this static property outside of the main thread is dangerous and not supported.</strong>
     /// </summary>
     public static ImFontPtr IconFontFixedWidth =>
-        WhenFontsReady().IconFontFixedWidthHandle!.LockUntilPostFrame().OrElse(ImGui.GetIO().FontDefault);
+        WhenFontsReady().IconFontFixedWidthHandle!.Font;
 
     /// <summary>
     /// Gets an included monospaced font.<br />
     /// <strong>Accessing this static property outside of the main thread is dangerous and not supported.</strong>
     /// </summary>
     public static ImFontPtr MonoFont =>
-        WhenFontsReady().MonoFontHandle!.LockUntilPostFrame().OrElse(ImGui.GetIO().FontDefault);
+        WhenFontsReady().MonoFontHandle!.Font;
 
     /// <summary>
     /// Gets the default font handle.
@@ -251,7 +251,7 @@ internal partial class InterfaceManager : IInternalDisposableService
 
     /// <summary>Gets a value indicating whether the main thread is executing <see cref="DxgiSwapChainPresentDetour"/>.</summary>
     /// <remarks>This still will be <c>true</c> even when queried off the main thread.</remarks>
-    public bool IsMainThreadInPresent { get; private set; }
+    public unsafe bool IsMainThreadInPresent { get; private set; }
 
     /// <summary>
     /// Gets a value indicating the native handle of the game main window.
@@ -292,7 +292,7 @@ internal partial class InterfaceManager : IInternalDisposableService
     /// The value increases even when Dalamud is hidden via &quot;/xlui hide&quot;.
     /// <see cref="DalamudInterface.FrameCount"/> does not.
     /// </remarks>
-    public long CumulativePresentCalls { get; private set; }
+    public unsafe long CumulativePresentCalls { get; private set; }
 
     /// <inheritdoc cref="AssertHandler.ShowAsserts"/>
     public bool ShowAsserts
@@ -355,7 +355,9 @@ internal partial class InterfaceManager : IInternalDisposableService
     public void RebuildFonts()
     {
         Log.Verbose("[FONT] RebuildFonts() called");
-        this.dalamudAtlas?.BuildFontsAsync();
+
+        // Every atlas builds its fonts again; the ones ending with the default font pick up the change.
+        Service<FontAtlasFactory>.GetNullable()?.InvalidateDefaultChain();
     }
 
     /// <summary>
@@ -368,7 +370,7 @@ internal partial class InterfaceManager : IInternalDisposableService
     }
 
     /// <summary>
-    /// Enqueue an <see cref="ILockedImFont"/> to be disposed at the end of the frame.
+    /// Enqueue a font reference or another object to be disposed at the end of the frame.
     /// </summary>
     /// <param name="locked">The disposable.</param>
     public void EnqueueDeferredDispose(IDisposable locked)
@@ -774,7 +776,7 @@ internal partial class InterfaceManager : IInternalDisposableService
 
             style.Apply();
 
-            ImGui.GetIO().FontGlobalScale = configuration.GlobalUiScale;
+            ImGui.GetStyle().FontScaleMain = configuration.GlobalUiScale;
 
             if (!configuration.IsDocking)
             {
@@ -789,12 +791,12 @@ internal partial class InterfaceManager : IInternalDisposableService
             if (!configuration.IsGamepadNavigationEnabled)
             {
                 ImGui.GetIO().BackendFlags &= ~ImGuiBackendFlags.HasGamepad;
-                ImGui.GetIO().ConfigFlags &= ~ImGuiConfigFlags.NavEnableSetMousePos;
+                ImGui.GetIO().ConfigNavMoveSetMousePos = false;
             }
             else
             {
                 ImGui.GetIO().BackendFlags |= ImGuiBackendFlags.HasGamepad;
-                ImGui.GetIO().ConfigFlags |= ImGuiConfigFlags.NavEnableSetMousePos;
+                ImGui.GetIO().ConfigNavMoveSetMousePos = true;
             }
 
             // NOTE (Chiv) Explicitly deactivate on dalamud boot
@@ -866,7 +868,7 @@ internal partial class InterfaceManager : IInternalDisposableService
         using (this.dalamudAtlas.SuppressAutoRebuild())
         {
             this.DefaultFontHandle = (FontHandle)this.dalamudAtlas.NewDelegateFontHandle(
-                e => e.OnPreBuild(tk => tk.AddDalamudDefaultFont(-1)));
+                e => e.OnPreBuild(tk => tk.AddDalamudDefaultFont(Service<FontAtlasFactory>.Get().DefaultSizePx)));
             this.IconFontHandle = (FontHandle)this.dalamudAtlas.NewDelegateFontHandle(
                 e => e.OnPreBuild(
                     tk => tk.AddFontAwesomeIconFont(
@@ -908,14 +910,19 @@ internal partial class InterfaceManager : IInternalDisposableService
                         missingOnly: true);
                     tk.FitRatio(tk.GetFont(this.IconFontFixedWidthHandle));
                 });
-            this.DefaultFontHandle.ImFontChanged += (_, font) =>
+            this.DefaultFontHandle.ImFontChanged += handle =>
             {
-                var fontLocked = font.NewRef();
-                this.framework.RunOnFrameworkThread(
+                var font = handle.Font;
+                font.AddRef();
+                var fontLocked = new LockedImFont(font);
+                var sizePx = ((FontHandle)handle).PushSize;
+
+                this.RunBeforeImGuiRender(
                     () =>
                     {
                         // Update the ImGui default font.
                         ImGui.GetIO().Handle->FontDefault = fontLocked.ImFont;
+                        ImGui.GetStyle().FontSizeBase = sizePx;
 
                         // Update the reference to the resources of the default font.
                         this.defaultFontResourceLock?.Dispose();

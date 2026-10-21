@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -80,7 +79,7 @@ internal sealed unsafe partial class Win32InputHandler : IImGuiInputHandler
         if (io.ConfigFlags.HasFlag(ImGuiConfigFlags.ViewportsEnable))
             this.viewportHandler = new(this);
 
-        this.cursors = new HCURSOR[9];
+        this.cursors = new HCURSOR[(int)ImGuiMouseCursor.Count];
         this.cursors[(int)ImGuiMouseCursor.Arrow] = LoadCursorW(default, IDC.IDC_ARROW);
         this.cursors[(int)ImGuiMouseCursor.TextInput] = LoadCursorW(default, IDC.IDC_IBEAM);
         this.cursors[(int)ImGuiMouseCursor.ResizeAll] = LoadCursorW(default, IDC.IDC_SIZEALL);
@@ -89,6 +88,8 @@ internal sealed unsafe partial class Win32InputHandler : IImGuiInputHandler
         this.cursors[(int)ImGuiMouseCursor.ResizeNesw] = LoadCursorW(default, IDC.IDC_SIZENESW);
         this.cursors[(int)ImGuiMouseCursor.ResizeNwse] = LoadCursorW(default, IDC.IDC_SIZENWSE);
         this.cursors[(int)ImGuiMouseCursor.Hand] = LoadCursorW(default, IDC.IDC_HAND);
+        this.cursors[(int)ImGuiMouseCursor.Wait] = LoadCursorW(default, IDC.IDC_WAIT);
+        this.cursors[(int)ImGuiMouseCursor.Progress] = LoadCursorW(default, IDC.IDC_APPSTARTING);
         this.cursors[(int)ImGuiMouseCursor.NotAllowed] = LoadCursorW(default, IDC.IDC_NO);
 
         this.cvLogMouseEvents = Service<ConsoleManager>.Get().AddVariable(

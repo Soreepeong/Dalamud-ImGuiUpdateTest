@@ -8,6 +8,7 @@ namespace Dalamud.Interface.GameFonts;
 /// <summary>
 /// Plan on how glyphs will be rendered.
 /// </summary>
+[Obsolete("Use ImGui or SeStringRenderer directly.")]
 public class GameFontLayoutPlan
 {
     /// <summary>

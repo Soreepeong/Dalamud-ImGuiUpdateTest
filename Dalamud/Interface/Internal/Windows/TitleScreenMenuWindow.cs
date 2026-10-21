@@ -160,7 +160,7 @@ internal class TitleScreenMenuWindow : Window, IDisposable
         if (!this.AllowDrawing || !this.showTsm.Value)
             return;
 
-        var scale = ImGui.GetIO().FontGlobalScale;
+        var scale = ImGui.GetStyle().FontScaleMain;
         var entries = this.titleScreenMenu.PluginEntries;
 
         var hovered = ImGui.IsWindowHovered(
@@ -335,7 +335,7 @@ internal class TitleScreenMenuWindow : Window, IDisposable
     {
         using var fontScopeDispose = this.myFontHandle.Value.Push();
 
-        var scale = ImGui.GetIO().FontGlobalScale;
+        var scale = ImGui.GetStyle().FontScaleMain;
 
         if (!this.shadeEasings.TryGetValue(entry.Id, out var shadeEasing))
         {
@@ -431,7 +431,7 @@ internal class TitleScreenMenuWindow : Window, IDisposable
             ReadOnlySeString.FromText(entry.Name),
             new()
             {
-                FontSize = TargetFontSizePx * ImGui.GetIO().FontGlobalScale,
+                FontSize = TargetFontSizePx * ImGui.GetStyle().FontScaleMain,
                 Edge = true,
                 Shadow = true,
             });

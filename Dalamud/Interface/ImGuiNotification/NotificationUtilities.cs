@@ -39,7 +39,7 @@ public static class NotificationUtilities
     /// <param name="fontHandle">The font handle to use.</param>
     /// <param name="color">The foreground color.</param>
     /// <returns><c>true</c> if anything has been drawn.</returns>
-    internal static unsafe bool DrawIconFrom(
+    internal static bool DrawIconFrom(
         Vector2 minCoord,
         Vector2 maxCoord,
         char c,
@@ -53,24 +53,26 @@ public static class NotificationUtilities
         using (fontHandle.Push())
         {
             var font = ImGui.GetFont();
-            var glyphPtr = (ImGuiHelpers.ImFontGlyphReal*)font.FindGlyphNoFallback(c);
-            if (glyphPtr is null)
+            var glyph = font.GetGlyphIndex(c);
+            if (glyph == 0)
                 return false;
 
-            ref readonly var glyph = ref *glyphPtr;
-            var size = glyph.XY1 - glyph.XY0;
+            var fontSize = ImGui.GetFontSize();
+            font.GetGlyphMetrics(glyph, fontSize, 1f, out var metric);
+            var (bounds, size) = (metric.Bounds, metric.Size);
             var smallerSizeDim = Math.Min(size.X, size.Y);
             var scale = smallerSizeDim > smallerDim ? smallerDim / smallerSizeDim : 1f;
             size *= scale;
             var pos = ((minCoord + maxCoord) - size) / 2;
             pos += ImGui.GetWindowPos();
-            ImGui.GetWindowDrawList().AddImage(
-                font.ContainerAtlas.Textures[glyph.TextureIndex].TexID,
-                pos,
-                pos + size,
-                glyph.UV0,
-                glyph.UV1,
-                ImGui.GetColorU32(color with { W = color.W * ImGui.GetStyle().Alpha }));
+
+            var ascent = font.GetMetrics(fontSize * scale).Ascent;
+            font.RenderChar(
+                ImGui.GetWindowDrawList(),
+                fontSize * scale,
+                pos - new Vector2(bounds.X * scale, (bounds.Y * scale) + ascent),
+                ImGui.GetColorU32(color with { W = color.W * ImGui.GetStyle().Alpha }),
+                c);
         }
 
         return true;

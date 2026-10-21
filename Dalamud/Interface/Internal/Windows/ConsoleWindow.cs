@@ -13,6 +13,7 @@ using Dalamud.Game;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Components;
+using Dalamud.Interface.Fonts.Internal;
 using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Interface.ImGuiNotification.Internal;
 using Dalamud.Interface.Utility;
@@ -227,7 +228,7 @@ internal class ConsoleWindow : Window, IDisposable
                 ImGui.Selectable(
                     "###console_null"u8,
                     true,
-                    ImGuiSelectableFlags.AllowItemOverlap | ImGuiSelectableFlags.SpanAllColumns);
+                    ImGuiSelectableFlags.AllowOverlap | ImGuiSelectableFlags.SpanAllColumns);
 
                 // This must be after ImGui.Selectable, it uses ImGui.IsItem... functions
                 this.HandleCopyMode(i, line);
@@ -1093,49 +1094,26 @@ internal class ConsoleWindow : Window, IDisposable
         uint col,
         uint highlightCol)
     {
-        Span<int> charOffsets = stackalloc int[(matches.Count * 2) + 2];
-        var charOffsetsIndex = 1;
+        if (ManagedFont.FromNative(ImGui.GetFont().Handle) is not { } font)
+            return;
+
+        // One layout with a colored run per match.
+        var highlight = new ImTextStyle { Color = highlightCol };
+        var runs = new TextRun[matches.Count];
+        var runCount = 0;
         for (var j = 0; j < matches.Count; j++)
         {
             var g = matches[j].Groups[0];
-            charOffsets[charOffsetsIndex++] = g.Index;
-            charOffsets[charOffsetsIndex++] = g.Index + g.Length;
-        }
-
-        charOffsets[charOffsetsIndex++] = line.Length;
-
-        var screenPos = ImGui.GetCursorScreenPos();
-        var drawList = ImGui.GetWindowDrawList().Handle;
-        var font = ImGui.GetFont();
-        var size = ImGui.GetFontSize();
-        var scale = size / font.FontSize;
-        var hotData = font.IndexedHotDataWrapped();
-        var lookup = font.IndexLookupWrapped();
-        var kern = (ImGui.GetIO().ConfigFlags & ImGuiConfigFlags.NoKerning) == 0;
-        var lastc = '\0';
-        for (var i = 0; i < charOffsetsIndex - 1; i++)
-        {
-            var begin = charOffsets[i];
-            var end = charOffsets[i + 1];
-            if (begin == end)
+            if (g.Length == 0)
                 continue;
-
-            for (var j = begin; j < end; j++)
-            {
-                var currc = line[j];
-                if (currc >= lookup.Length || lookup[currc] == ushort.MaxValue)
-                    currc = (char)font.FallbackChar;
-
-                if (kern)
-                    screenPos.X += scale * ImGui.GetFont().GetDistanceAdjustmentForPair(lastc, currc);
-                font.RenderChar(drawList, size, screenPos, i % 2 == 1 ? highlightCol : col, currc);
-
-                screenPos.X += scale * hotData[currc].AdvanceX;
-                lastc = currc;
-            }
+            runs[runCount++] = new(g.Index * sizeof(char), (g.Index + g.Length) * sizeof(char), Style: highlight);
         }
 
-        ImGui.Dummy(screenPos - ImGui.GetCursorScreenPos());
+        ImTextDesc desc;
+        ImGuiPNative.GetTextDesc(&desc, 0, ImTextLayoutFlags.None);
+        var layout = TextLayouter.Create(font, new(desc.Size, desc.Density), default(ImTextStyle), line, runs.AsSpan(0, runCount));
+        layout.Render(ImGui.GetWindowDrawList(), ImGui.GetCursorScreenPos(), col);
+        ImGui.Dummy(layout.Size);
     }
 
     private record LogEntry

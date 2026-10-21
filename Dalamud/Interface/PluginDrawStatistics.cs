@@ -15,6 +15,7 @@ internal sealed class PluginDrawStatistics
     private readonly Queue<long> drawTimeHistory = [];
 
     private int styleStack;
+    private int textStyleStack;
     private int colorStack;
     private int fontStack;
     private short disabledStack;
@@ -34,7 +35,7 @@ internal sealed class PluginDrawStatistics
     /// </summary>
     public long AverageDrawTime { get; private set; } = -1;
 
-    /// <summary> Gets the total amount of leaked style variables from this plugin. </summary>
+    /// <summary> Gets the total amount of leaked style variables and text styles from this plugin. </summary>
     public int LeakedStyles { get; private set; }
 
     /// <summary> Gets the total amount of leaked colors from this plugin. </summary>
@@ -55,6 +56,7 @@ internal sealed class PluginDrawStatistics
         this.stopwatch.Restart();
         var context = ImGui.GetCurrentContext();
         this.styleStack = context.StyleVarStack.Size;
+        this.textStyleStack = ImGui.GetTextStyleStackSize();
         this.colorStack = context.ColorStack.Size;
         this.fontStack = context.FontStack.Size;
         this.disabledStack = context.DisabledStackSize;
@@ -74,6 +76,8 @@ internal sealed class PluginDrawStatistics
         var context = ImGui.GetCurrentContext();
         if (this.styleStack < context.StyleVarStack.Size)
             this.LeakedStyles += context.StyleVarStack.Size - this.styleStack;
+        if (this.textStyleStack < ImGui.GetTextStyleStackSize())
+            this.LeakedStyles += ImGui.GetTextStyleStackSize() - this.textStyleStack;
         if (this.colorStack < context.ColorStack.Size)
             this.LeakedColors += context.ColorStack.Size - this.colorStack;
         if (this.fontStack < context.FontStack.Size)

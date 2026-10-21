@@ -126,30 +126,26 @@ internal readonly unsafe struct FdtFileView
     /// </summary>
     /// <param name="mergeDistance">Merge two ranges into one if distance is below the value specified in this parameter.</param>
     /// <returns>Glyph ranges.</returns>
-    public ushort[] ToGlyphRanges(int mergeDistance = 8)
+    public uint[] ToGlyphRanges(int mergeDistance = 8)
     {
         var glyphs = this.Glyphs;
-        var ranges = new List<ushort>(glyphs.Length)
+        var ranges = new List<uint>(glyphs.Length)
         {
-            checked((ushort)glyphs[0].CharInt),
-            checked((ushort)glyphs[0].CharInt),
+            (uint)glyphs[0].CharInt,
+            (uint)glyphs[0].CharInt,
         };
 
         foreach (ref var glyph in glyphs[1..])
         {
-            var c32 = glyph.CharInt;
-            if (c32 >= 0x10000)
-                break;
-
-            var c16 = unchecked((ushort)c32);
-            if (ranges[^1] + mergeDistance >= c16 && c16 > ranges[^1])
+            var c = (uint)glyph.CharInt;
+            if (ranges[^1] + mergeDistance >= c && c > ranges[^1])
             {
-                ranges[^1] = c16;
+                ranges[^1] = c;
             }
-            else if (ranges[^1] + 1 < c16)
+            else if (ranges[^1] + 1 < c)
             {
-                ranges.Add(c16);
-                ranges.Add(c16);
+                ranges.Add(c);
+                ranges.Add(c);
             }
         }
 

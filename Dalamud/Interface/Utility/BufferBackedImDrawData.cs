@@ -38,13 +38,10 @@ public unsafe struct BufferBackedImDrawData : IDisposable
         var ds = (DataStruct*)res.buffer;
         *ds = default;
 
-        var atlas = ImGui.GetIO().Fonts;
+        var shapeTexture = ImGui.GetShapeTexture();
         ds->SharedData = *ImGui.GetDrawListSharedData().Handle;
-        ds->SharedData.TexIdCommon = atlas.Textures[atlas.TextureIndexCommon].TexID;
-        ds->SharedData.TexUvWhitePixel = atlas.TexUvWhitePixel;
-        ds->SharedData.TexUvLines = (Vector4*)Unsafe.AsPointer(ref atlas.TexUvLines[0]);
         ds->SharedData.Font = ImGui.GetIO().FontDefault;
-        ds->SharedData.FontSize = ds->SharedData.Font->FontSize;
+        ds->SharedData.FontSize = ImGui.GetStyle().FontSizeBase;
         ds->SharedData.ClipRectFullscreen = new(
             float.NegativeInfinity,
             float.NegativeInfinity,
@@ -53,14 +50,13 @@ public unsafe struct BufferBackedImDrawData : IDisposable
 
         ds->List.Data = &ds->SharedData;
         ds->ListPtr = &ds->List;
-        ds->Data.CmdLists = &ds->ListPtr;
-        ds->Data.CmdListsCount = 1;
+        ds->Data.CmdLists = new(1, 1, (ImDrawListPtr*)&ds->ListPtr);
         ds->Data.FramebufferScale = Vector2.One;
         ds->Data.Valid = 1;
 
         res.ListPtr._ResetForNewFrame();
         res.ListPtr.PushClipRectFullScreen();
-        res.ListPtr.PushTextureID(new(atlas.TextureIndexCommon));
+        res.ListPtr.PushTexture(new(shapeTexture.Handle));
         return res;
     }
 

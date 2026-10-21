@@ -604,7 +604,7 @@ internal class PluginInstallerWindow : Window, IDisposable
                 ImGui.GetWindowPos() + windowSize,
                 ImGui.ColorConvertFloat4ToU32(new(0f, 0f, 0f, 0.8f * ImGui.GetStyle().Alpha)),
                 ImGui.GetStyle().WindowRounding,
-                ImDrawFlags.RoundCornersBottom);
+                ImDrawFlags.RoundBottom);
             ImGui.PopClipRect();
 
             ImGui.SetCursorPosY(windowSize.Y / 2);
@@ -1690,7 +1690,7 @@ internal class PluginInstallerWindow : Window, IDisposable
         var colorSearchHighlight = Vector4.One;
         unsafe
         {
-            var colorPtr = ImGui.GetStyleColorVec4(ImGuiCol.NavHighlight);
+            var colorPtr = ImGui.GetStyleColorVec4(ImGuiCol.NavCursor);
             if (colorPtr != null)
             {
                 colorSearchHighlight = *colorPtr;

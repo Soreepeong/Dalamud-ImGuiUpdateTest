@@ -302,11 +302,11 @@ public class StyleEditorWindow : Window
                 {
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 5);
 
-                    if (ImGui.RadioButton("Opaque"u8, this.alphaFlags == ImGuiColorEditFlags.None))
-                        this.alphaFlags = ImGuiColorEditFlags.None;
+                    if (ImGui.RadioButton("Opaque"u8, this.alphaFlags == ImGuiColorEditFlags.AlphaOpaque))
+                        this.alphaFlags = ImGuiColorEditFlags.AlphaOpaque;
                     ImGui.SameLine();
-                    if (ImGui.RadioButton("Alpha"u8, this.alphaFlags == ImGuiColorEditFlags.AlphaPreview))
-                        this.alphaFlags = ImGuiColorEditFlags.AlphaPreview;
+                    if (ImGui.RadioButton("Alpha"u8, this.alphaFlags == ImGuiColorEditFlags.None))
+                        this.alphaFlags = ImGuiColorEditFlags.None;
                     ImGui.SameLine();
                     if (ImGui.RadioButton("Both"u8, this.alphaFlags == ImGuiColorEditFlags.AlphaPreviewHalf))
                         this.alphaFlags = ImGuiColorEditFlags.AlphaPreviewHalf;

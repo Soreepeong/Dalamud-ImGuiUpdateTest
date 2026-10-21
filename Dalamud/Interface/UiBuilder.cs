@@ -877,6 +877,8 @@ public sealed class UiBuilder : IDisposable, IUiBuilder
 
         public bool Available => this.WrappedNotDisposed.Available;
 
+        public ImFontPtr Font => this.WrappedNotDisposed.Font;
+
         private IFontHandle WrappedNotDisposed =>
             this.wrapped ?? throw new ObjectDisposedException(nameof(FontHandleWrapper));
 
@@ -890,35 +892,19 @@ public sealed class UiBuilder : IDisposable, IUiBuilder
             // Note: do not dispose w; we do not own it
         }
 
-        public ILockedImFont? TryLock(out string? errorMessage)
-        {
-            if (this.wrapped is { } w)
-                return w.TryLock(out errorMessage);
-
-            errorMessage = nameof(ObjectDisposedException);
-            return null;
-        }
-
-        public ILockedImFont Lock() =>
-            this.wrapped?.Lock() ?? throw new ObjectDisposedException(nameof(FontHandleWrapper));
-
         public IDisposable Push() => this.WrappedNotDisposed.Push();
+
+        public IDisposable Push(float sizePx) => this.WrappedNotDisposed.Push(sizePx);
 
         public void Pop() => this.WrappedNotDisposed.Pop();
 
-        public Task<IFontHandle> WaitAsync() =>
-            this.wrapped?.WaitAsync().ContinueWith(_ => (IFontHandle)this)
-            ?? Task.FromException<IFontHandle>(new ObjectDisposedException(nameof(FontHandleWrapper)));
+        public Task<IFontHandle> WaitAsync() => Task.FromResult<IFontHandle>(this);
 
-        public Task<IFontHandle> WaitAsync(CancellationToken cancellationToken) =>
-            this.wrapped?.WaitAsync(cancellationToken)
-                .ContinueWith(_ => (IFontHandle)this, cancellationToken)
-            ?? Task.FromException<IFontHandle>(new ObjectDisposedException(nameof(FontHandleWrapper)));
+        public Task<IFontHandle> WaitAsync(CancellationToken cancellationToken) => Task.FromResult<IFontHandle>(this);
 
         public override string ToString() =>
             $"{nameof(FontHandleWrapper)}({this.wrapped?.ToString() ?? "disposed"})";
 
-        private void WrappedOnImFontChanged(IFontHandle obj, ILockedImFont lockedFont) =>
-            this.ImFontChanged?.Invoke(obj, lockedFont);
+        private void WrappedOnImFontChanged(IFontHandle obj) => this.ImFontChanged?.Invoke(this);
     }
 }

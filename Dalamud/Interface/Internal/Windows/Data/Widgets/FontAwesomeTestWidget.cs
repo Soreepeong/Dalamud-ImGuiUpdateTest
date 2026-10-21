@@ -56,9 +56,9 @@ internal class FontAwesomeTestWidget : IDataWindowWidget
         {
             if (this.iconSearchInput == string.Empty && this.selectedIconCategory <= 1)
             {
-                var en = InterfaceManager.IconFont.GlyphsWrapped()
-                                         .Select(x => (FontAwesomeIcon)x.Codepoint)
-                                         .Where(x => (ushort)x is >= 0xE000 and < 0xF000);
+                var en = Enumerable.Range(0xE000, 0x1000)
+                                 .Where(x => InterfaceManager.IconFont.IsGlyphInFont((uint)x))
+                                 .Select(x => (FontAwesomeIcon)x);
                 en = this.selectedIconCategory == 0
                          ? en.Concat(FontAwesomeHelpers.SearchIcons(string.Empty, string.Empty))
                          : en.Except(FontAwesomeHelpers.SearchIcons(string.Empty, string.Empty));
