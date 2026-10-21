@@ -1567,7 +1567,11 @@ bool ImGui::TextLink(const char* label)
         ColorConvertHSVtoRGB(h, s, v, line_colf.x, line_colf.y, line_colf.z);
     }
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     float line_y = bb.Max.y + ImFloor(g.FontBaked->Descent * g.FontBakedScale * 0.20f);
+#else
+    float line_y = bb.Max.y + ImFloor(GetFontMetrics().Descent * 0.20f);
+#endif // END DALAMUD CUSTOM [FONT]
     window->DrawList->AddLineH(bb.Min.x, bb.Max.x, line_y, GetColorU32(line_colf), 1.0f * (float)(int)g.Style._MainScale); // FIXME-TEXT: Underline mode // FIXME-DPI
 
     PushStyleColor(ImGuiCol_Text, GetColorU32(text_colf));
@@ -4101,7 +4105,13 @@ static ImVec2 InputTextCalcTextSize(ImGuiContext* ctx, const char* text_begin, c
     ImGuiContext& g = *ctx;
     ImGuiInputTextState* obj = &g.InputTextState;
     IM_ASSERT(text_end_display >= text_begin && text_end_display <= text_end);
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     return ImFontCalcTextSizeEx(g.Font, g.FontSize, FLT_MAX, obj->WrapWidth, text_begin, text_end_display, text_end, out_remaining, out_offset, flags);
+#else
+    ImTextDesc desc;
+    ImGui::GetTextDesc(&desc, obj->WrapWidth, ImGui::ConvertDrawTextFlags(flags));
+    return ImGui::CalcTextSizeEx(g.Font, &desc, text_begin, text_end_display, text_end, out_remaining, out_offset);
+#endif // END DALAMUD CUSTOM [FONT]
 }
 
 // Wrapper for stb_textedit.h to edit text (our wrapper is for: statically sized buffer, single-line, wchar characters. InputText converts between UTF-8 and wchar)
@@ -4113,7 +4123,11 @@ namespace ImStb
 {
 static int     STB_TEXTEDIT_STRINGLEN(const ImGuiInputTextState* obj)                             { return obj->TextLen; }
 static char    STB_TEXTEDIT_GETCHAR(const ImGuiInputTextState* obj, int idx)                      { IM_ASSERT(idx >= 0 && idx <= obj->TextLen); return obj->TextSrc[idx]; }
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 static float   STB_TEXTEDIT_GETWIDTH(ImGuiInputTextState* obj, int line_start_idx, int char_idx)  { unsigned int c; ImTextCharFromUtf8(&c, obj->TextSrc + line_start_idx + char_idx, obj->TextSrc + obj->TextLen); if ((ImWchar)c == '\n') return IMSTB_TEXTEDIT_GETWIDTH_NEWLINE; ImGuiContext& g = *obj->Ctx; return g.FontBaked->GetCharAdvance((ImWchar)c) * g.FontBakedScale; }
+#else
+static float   STB_TEXTEDIT_GETWIDTH(ImGuiInputTextState* obj, int line_start_idx, int char_idx)  { return ImGui::InputTextCalcCharWidth(obj, line_start_idx, char_idx, IMSTB_TEXTEDIT_GETWIDTH_NEWLINE); }
+#endif // END DALAMUD CUSTOM [FONT]
 static char    STB_TEXTEDIT_NEWLINE = '\n';
 static void    STB_TEXTEDIT_LAYOUTROW(StbTexteditRow* r, ImGuiInputTextState* obj, int line_start_idx)
 {
@@ -4229,14 +4243,20 @@ static int STB_TEXTEDIT_MOVELINESTART_IMPL(ImGuiInputTextState* obj, ImStb::STB_
 
     if (obj->WrapWidth > 0.0f)
     {
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
         ImGuiContext& g = *obj->Ctx;
+#endif // END DALAMUD CUSTOM [FONT]
         const char* p_cursor = obj->TextSrc + cursor;
         const char* p_bol = ImStrbol(p_cursor, obj->TextSrc);
         const char* p = p_bol;
         const char* text_end = obj->TextSrc + obj->TextLen; // End of line would be enough
         while (p >= p_bol)
         {
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
             const char* p_eol = ImFontCalcWordWrapPositionEx(g.Font, g.FontSize, p, text_end, obj->WrapWidth, ImDrawTextFlags_WrapKeepBlanks);
+#else
+            const char* p_eol = ImGui::CalcWrappedLineEnd(p, text_end, obj->WrapWidth, ImTextLayoutFlags_WrapKeepBlanks);
+#endif // END DALAMUD CUSTOM [FONT]
             if (p == p_cursor) // If we are already on a visible beginning-of-line, return real beginning-of-line (would be same as regular handler below)
                 return (int)(p_bol - obj->TextSrc);
             if (p_eol == p_cursor && obj->TextSrc[cursor] != '\n' && obj->LastMoveDirectionLR == ImGuiDir_Left)
@@ -4266,13 +4286,19 @@ static int STB_TEXTEDIT_MOVELINEEND_IMPL(ImGuiInputTextState* obj, ImStb::STB_Te
 
     if (obj->WrapWidth > 0.0f)
     {
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
         ImGuiContext& g = *obj->Ctx;
+#endif // END DALAMUD CUSTOM [FONT]
         const char* p_cursor = obj->TextSrc + cursor;
         const char* p = ImStrbol(p_cursor, obj->TextSrc);
         const char* text_end = obj->TextSrc + obj->TextLen; // End of line would be enough
         while (p < text_end)
         {
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
             const char* p_eol = ImFontCalcWordWrapPositionEx(g.Font, g.FontSize, p, text_end, obj->WrapWidth, ImDrawTextFlags_WrapKeepBlanks);
+#else
+            const char* p_eol = ImGui::CalcWrappedLineEnd(p, text_end, obj->WrapWidth, ImTextLayoutFlags_WrapKeepBlanks);
+#endif // END DALAMUD CUSTOM [FONT]
             cursor = (int)(p_eol - obj->TextSrc);
             if (p_eol == p_cursor && obj->LastMoveDirectionLR != ImGuiDir_Left) // If we are already on a visible end-of-line, switch to regular handle
                 break;
@@ -4375,6 +4401,28 @@ static void stb_textedit_replace(ImGuiInputTextState* str, STB_TexteditState* st
     }
     IM_ASSERT(0); // Failed to insert character, normally shouldn't happen because of how we currently use stb_textedit_replace()
 }
+
+// BEGIN DALAMUD CUSTOM [FONT]
+static bool InputTextMoveKey(ImGuiInputTextState* str, int key)
+{
+    const bool shift = (key & STB_TEXTEDIT_K_SHIFT) != 0;
+    switch (key & ~STB_TEXTEDIT_K_SHIFT)
+    {
+    case STB_TEXTEDIT_K_LEFT:       return ImGui::InputTextMoveCursor(str, ImGuiInputTextMove_Left, shift);
+    case STB_TEXTEDIT_K_RIGHT:      return ImGui::InputTextMoveCursor(str, ImGuiInputTextMove_Right, shift);
+    case STB_TEXTEDIT_K_UP:         return ImGui::InputTextMoveCursor(str, ImGuiInputTextMove_Up, shift);
+    case STB_TEXTEDIT_K_DOWN:       return ImGui::InputTextMoveCursor(str, ImGuiInputTextMove_Down, shift);
+    case STB_TEXTEDIT_K_PGUP:       return ImGui::InputTextMoveCursor(str, ImGuiInputTextMove_PageUp, shift);
+    case STB_TEXTEDIT_K_PGDOWN:     return ImGui::InputTextMoveCursor(str, ImGuiInputTextMove_PageDown, shift);
+    case STB_TEXTEDIT_K_LINESTART:  return ImGui::InputTextMoveCursor(str, ImGuiInputTextMove_LineStart, shift);
+    case STB_TEXTEDIT_K_LINEEND:    return ImGui::InputTextMoveCursor(str, ImGuiInputTextMove_LineEnd, shift);
+    default:                        return false;
+    }
+}
+#define stb_textedit_key(str, state, key)       do { if (!ImStb::InputTextMoveKey(str, key)) stb_textedit_key(str, state, key); } while (0)
+#define stb_textedit_click(str, state, x, y)    ((void)&ImStb::stb_textedit_click, ImGui::InputTextClick(str, x, y, false)) // The address keeps the replaced function referenced.
+#define stb_textedit_drag(str, state, x, y)     ((void)&ImStb::stb_textedit_drag, ImGui::InputTextClick(str, x, y, true))
+// END DALAMUD CUSTOM [FONT]
 
 } // namespace ImStb
 
@@ -4501,6 +4549,7 @@ void ImGuiInputTextCallbackData::InsertChars(int pos, const char* new_text, cons
 void ImGui::PushPasswordFont()
 {
     ImGuiContext& g = *GImGui;
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     ImFontBaked* backup = &g.InputTextPasswordFontBackupBaked;
     IM_ASSERT(backup->IndexAdvanceX.Size == 0 && backup->IndexLookup.Size == 0);
     ImFontGlyph* glyph = g.FontBaked->FindGlyph('*');
@@ -4512,11 +4561,15 @@ void ImGui::PushPasswordFont()
     g.Font->Flags |= ImFontFlags_NoLoadGlyphs;
     g.FontBaked->FallbackGlyphIndex = g.FontBaked->Glyphs.index_from_ptr(glyph);
     g.FontBaked->FallbackAdvanceX = glyph->AdvanceX;
+#else
+    g.InputTextPasswordMaskCount++;
+#endif // END DALAMUD CUSTOM [FONT]
 }
 
 void ImGui::PopPasswordFont()
 {
     ImGuiContext& g = *GImGui;
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     ImFontBaked* backup = &g.InputTextPasswordFontBackupBaked;
     g.Font->Flags = g.InputTextPasswordFontBackupFlags;
     g.FontBaked->FallbackGlyphIndex = backup->FallbackGlyphIndex;
@@ -4524,6 +4577,10 @@ void ImGui::PopPasswordFont()
     g.FontBaked->IndexLookup.swap(backup->IndexLookup);
     g.FontBaked->IndexAdvanceX.swap(backup->IndexAdvanceX);
     IM_ASSERT(backup->IndexAdvanceX.Size == 0 && backup->IndexLookup.Size == 0);
+#else
+    IM_ASSERT(g.InputTextPasswordMaskCount > 0);
+    g.InputTextPasswordMaskCount--;
+#endif // END DALAMUD CUSTOM [FONT]
 }
 
 // Return false to discard a character.
@@ -4726,12 +4783,18 @@ static int InputTextLineIndexBuild(ImGuiInputTextFlags flags, ImGuiTextIndex* li
     bool trailing_line_already_counted = false;
     if (flags & ImGuiInputTextFlags_WordWrap)
     {
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
         for (s = buf; s < buf_end; s = (*s == '\n') ? s + 1 : s)
         {
             if (size++ <= max_output_buffer_size)
                 line_index->Offsets.push_back((int)(s - buf));
             s = ImFontCalcWordWrapPositionEx(g.Font, g.FontSize, s, buf_end, wrap_width, ImDrawTextFlags_WrapKeepBlanks);
         }
+#else
+        IM_UNUSED(g);
+        size = ImGui::InputTextBuildWrappedLineIndex(line_index, buf, buf_end, wrap_width, max_output_buffer_size);
+        s = buf_end;
+#endif // END DALAMUD CUSTOM [FONT]
     }
     else if (buf_end != NULL)
     {
@@ -4782,7 +4845,12 @@ static ImVec2 InputTextLineIndexGetPosOffset(ImGuiContext& g, ImGuiInputTextStat
     const int line_no = (it == it_begin) ? 0 : line_index->Offsets.index_from_ptr(it);
     const char* line_start = line_index->get_line_begin(buf, line_no);
     ImVec2 offset;
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     offset.x = InputTextCalcTextSize(&g, line_start, cursor_ptr, buf_end, NULL, NULL, ImDrawTextFlags_WrapKeepBlanks).x;
+#else
+    IM_UNUSED(line_start);
+    offset.x = ImGui::InputTextCaretX(buf, buf_end, cursor_n, state != NULL && state->WrapWidth > 0.0f && state->LastMoveDirectionLR == ImGuiDir_Right, state != NULL ? state->WrapWidth : 0.0f);
+#endif // END DALAMUD CUSTOM [FONT]
     offset.y = (line_no + 1) * g.FontSize;
     return offset;
 }
@@ -5712,6 +5780,7 @@ bool ImGui::InputTextEx(const char* label, const char* hint, char* buf, int buf_
             const ImU32 bg_color = GetColorU32(ImGuiCol_TextSelectedBg, render_cursor ? 1.0f : 0.6f); // FIXME: current code flow mandate that render_cursor is always true here, we are leaving the transparent one for tests.
             const float bg_offy_up = is_multiline ? 0.0f : -1.0f; // FIXME-DPI: those offsets should be part of the style? they don't play so well with multi-line selection.
             const float bg_offy_dn = is_multiline ? 0.0f : 2.0f;
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
             const float bg_eol_width = IM_TRUNC(g.FontBaked->GetCharAdvance((ImWchar)' ') * 0.50f); // So we can see selected empty lines
 
             const char* text_selected_begin = buf_display + ImMin(state->Stb->select_start, state->Stb->select_end);
@@ -5743,6 +5812,13 @@ bool ImGui::InputTextEx(const char* label, const char* hint, char* buf, int buf_
                 rect.ClipWith(clip_rect);
                 draw_window->DrawList->AddRectFilled(rect.Min, rect.Max, bg_color);
             }
+#else
+            const float bg_eol_width = IM_TRUNC(CalcTextSize(" ", NULL, false).x * 0.50f); // So we can see selected empty lines
+
+            InputTextRenderSelection(draw_window->DrawList, line_index, buf_display, buf_display_end, wrap_width,
+                ImMin(state->Stb->select_start, state->Stb->select_end), ImMax(state->Stb->select_start, state->Stb->select_end),
+                line_visible_n0, line_visible_n1, draw_pos - draw_scroll, bg_offy_up, bg_offy_dn, bg_eol_width, clip_rect, bg_color);
+#endif // END DALAMUD CUSTOM [FONT]
         }
     }
 
@@ -5753,12 +5829,29 @@ bool ImGui::InputTextEx(const char* label, const char* hint, char* buf, int buf_
 
     // Render text
     if ((is_multiline || (buf_display_end - buf_display) < buf_display_max_length) && (text_col & IM_COL32_A_MASK) && (line_visible_n0 < line_visible_n1))
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
         g.Font->RenderText(draw_window->DrawList, g.FontSize,
             draw_pos - draw_scroll + ImVec2(0.0f, line_visible_n0 * g.FontSize),
             text_col, clip_rect.AsVec4(),
             line_index->get_line_begin(buf_display, line_visible_n0),
             line_index->get_line_end(buf_display, line_visible_n1 - 1),
             wrap_width, ImDrawTextFlags_WrapKeepBlanks | ImDrawTextFlags_CpuFineClip);
+#else
+    {
+        ImTextDesc desc;
+        GetTextDesc(&desc, wrap_width, ImTextLayoutFlags_WrapKeepBlanks);
+        const ImVec4 clip_rect_v4 = clip_rect.AsVec4();
+        if (is_wordwrap) // Laid out per logical line, as the line index was.
+            InputTextRenderWrapped(draw_window->DrawList, line_index, buf_display, buf_display_end, wrap_width, line_visible_n0, line_visible_n1, draw_pos - draw_scroll, text_col, clip_rect_v4);
+        else
+            AddTextEx(draw_window->DrawList, g.Font, &desc,
+                draw_pos - draw_scroll + ImVec2(0.0f, line_visible_n0 * g.FontSize),
+                text_col,
+                line_index->get_line_begin(buf_display, line_visible_n0),
+                line_index->get_line_end(buf_display, line_visible_n1 - 1),
+                &clip_rect_v4, ImTextRenderFlags_CpuFineClip);
+    }
+#endif // END DALAMUD CUSTOM [FONT]
 
     // Render blinking cursor
     if (render_cursor)

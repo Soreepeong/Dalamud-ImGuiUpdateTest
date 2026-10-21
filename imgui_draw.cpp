@@ -123,6 +123,7 @@ namespace IMGUI_STB_NAMESPACE
 #pragma GCC diagnostic ignored "-Wimplicit-fallthrough"     // warning: this statement may fall through
 #endif
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 #ifndef STB_RECT_PACK_IMPLEMENTATION                        // in case the user already have an implementation in the _same_ compilation unit (e.g. unity builds)
 #ifndef IMGUI_DISABLE_STB_RECT_PACK_IMPLEMENTATION          // in case the user already have an implementation in another compilation unit
 #define STBRP_STATIC
@@ -162,6 +163,7 @@ namespace IMGUI_STB_NAMESPACE
 #endif
 #endif
 #endif // IMGUI_ENABLE_STB_TRUETYPE
+#endif // END DALAMUD CUSTOM [FONT]
 
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
@@ -780,6 +782,10 @@ void ImDrawList::PrimReserve(int idx_count, int vtx_count)
     int vtx_buffer_old_size = VtxBuffer.Size;
     VtxBuffer.resize(vtx_buffer_old_size + vtx_count);
     _VtxWritePtr = VtxBuffer.Data + vtx_buffer_old_size;
+    // BEGIN DALAMUD CUSTOM [FONT]
+    for (int i = 0; i < vtx_count; i++)
+        _VtxWritePtr[i].ext[0] = 0;
+    // END DALAMUD CUSTOM [FONT]
 
     int idx_buffer_old_size = IdxBuffer.Size;
     IdxBuffer.resize(idx_buffer_old_size + idx_count);
@@ -2977,7 +2983,17 @@ void ImDrawList::AddText(ImFont* font, float font_size, const ImVec2& pos, ImU32
         clip_rect.z = ImMin(clip_rect.z, cpu_fine_clip_rect->z);
         clip_rect.w = ImMin(clip_rect.w, cpu_fine_clip_rect->w);
     }
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     font->RenderText(this, font_size, pos, col, clip_rect, text_begin, text_end, wrap_width, (cpu_fine_clip_rect != NULL) ? ImDrawTextFlags_CpuFineClip : ImDrawTextFlags_None);
+#else
+    ImTextDesc desc;
+    ImGui::GetTextDesc(&desc, wrap_width, ImTextLayoutFlags_None, this);
+    desc.Size = font_size;
+    ImTextRenderFlags render_flags = (cpu_fine_clip_rect != NULL) ? ImTextRenderFlags_CpuFineClip : ImTextRenderFlags_None;
+    if (Flags & ImDrawFlags_TextNoPixelSnap)
+        render_flags |= ImTextRenderFlags_NoPixelSnap;
+    ImGui::AddTextEx(this, font, &desc, pos, col, text_begin, text_end, &clip_rect, render_flags, NULL);
+#endif // END DALAMUD CUSTOM [FONT]
 }
 
 void ImDrawList::AddText(const ImVec2& pos, ImU32 col, const char* text_begin, const char* text_end)
@@ -3664,6 +3680,7 @@ void ImGui::ShadeVertsTransformPos(ImDrawList* draw_list, int vert_start_idx, in
 // [SECTION] ImFontConfig
 //-----------------------------------------------------------------------------
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 // FIXME-NEWATLAS: Oversample specification could be more dynamic. For now, favoring automatic selection.
 ImFontConfig::ImFontConfig()
 {
@@ -3677,6 +3694,7 @@ ImFontConfig::ImFontConfig()
     RasterizerDensity = 1.0f;
     EllipsisChar = 0;
 }
+#endif // END DALAMUD CUSTOM [FONT]
 
 //-----------------------------------------------------------------------------
 // [SECTION] ImTextureData
@@ -3886,6 +3904,7 @@ static const ImVec2 FONT_ATLAS_DEFAULT_TEX_CURSOR_DATA[ImGuiMouseCursor_COUNT][3
     { ImVec2(109,0),ImVec2(13,15), ImVec2( 6, 7) }, // ImGuiMouseCursor_NotAllowed
 };
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 #define IM_FONTGLYPH_INDEX_UNUSED           ((ImU16)-1) // 0xFFFF
 #define IM_FONTGLYPH_INDEX_NOT_FOUND        ((ImU16)-2) // 0xFFFE
 
@@ -4069,6 +4088,7 @@ void ImFontAtlasUpdateNewFrame(ImFontAtlas* atlas, int frame_count, bool rendere
         builder->BakedDiscardedCount = 0;
     }
 }
+#endif // END DALAMUD CUSTOM [FONT]
 
 bool ImTextureDataUpdateNewFrame(ImTextureData* tex)
 {
@@ -4114,6 +4134,7 @@ bool ImTextureDataUpdateNewFrame(ImTextureData* tex)
     return remove_from_list;
 }
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 void ImFontAtlasTextureBlockConvert(const unsigned char* src_pixels, ImTextureFormat src_fmt, int src_pitch, unsigned char* dst_pixels, ImTextureFormat dst_fmt, int dst_pitch, int w, int h)
 {
     IM_ASSERT(src_pixels != NULL && dst_pixels != NULL);
@@ -4230,6 +4251,7 @@ void ImFontAtlasTextureBlockQueueUpload(ImFontAtlas* atlas, ImTextureData* tex, 
     ImTextureDataQueueUpload(tex, x, y, w, h);
     atlas->TexIsBuilt = false;
 }
+#endif // END DALAMUD CUSTOM [FONT]
 
 // Queue texture block update for renderer backend
 void ImTextureDataQueueUpload(ImTextureData* tex, int x, int y, int w, int h)
@@ -4257,6 +4279,7 @@ void ImTextureDataQueueUpload(ImTextureData* tex, int x, int y, int w, int h)
     }
 }
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 #ifndef IMGUI_DISABLE_OBSOLETE_FUNCTIONS
 static void GetTexDataAsFormat(ImFontAtlas* atlas, ImTextureFormat format, unsigned char** out_pixels, int* out_width, int* out_height, int* out_bytes_per_pixel)
 {
@@ -4708,7 +4731,29 @@ bool ImFontAtlasGetMouseCursorTexData(ImFontAtlas* atlas, ImGuiMouseCursor curso
     out_uv_fill[1] = (pos + size) * atlas->TexUvScale;
     return true;
 }
+#else
+bool ImGui::GetMouseCursorTexData(ImGuiMouseCursor cursor_type, ImVec2* out_offset, ImVec2* out_size, ImVec2 out_uv_border[2], ImVec2 out_uv_fill[2])
+{
+    if (cursor_type <= ImGuiMouseCursor_None || cursor_type >= ImGuiMouseCursor_COUNT)
+        return false;
+    const ImDrawShapeTexUvs* uvs = &GImGui->DrawListSharedData.ShapeTexUvs;
+    if (GImGui->DrawListSharedData.ShapeTex == NULL)
+        return false;
 
+    ImVec2 pos = FONT_ATLAS_DEFAULT_TEX_CURSOR_DATA[cursor_type][0] + uvs->MouseCursorsOrigin;
+    ImVec2 size = FONT_ATLAS_DEFAULT_TEX_CURSOR_DATA[cursor_type][1];
+    *out_size = size;
+    *out_offset = FONT_ATLAS_DEFAULT_TEX_CURSOR_DATA[cursor_type][2];
+    out_uv_border[0] = (pos) * uvs->TexUvScale;
+    out_uv_border[1] = (pos + size) * uvs->TexUvScale;
+    pos.x += FONT_ATLAS_DEFAULT_TEX_DATA_W + 1;
+    out_uv_fill[0] = (pos) * uvs->TexUvScale;
+    out_uv_fill[1] = (pos + size) * uvs->TexUvScale;
+    return true;
+}
+#endif // END DALAMUD CUSTOM [FONT]
+
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 // When atlas->RendererHasTextures = true, this is only called if no font were loaded.
 void ImFontAtlasBuildMain(ImFontAtlas* atlas)
 {
@@ -4795,11 +4840,18 @@ void ImFontAtlasBuildUpdatePointers(ImFontAtlas* atlas)
     for (ImFontConfig& src : atlas->Sources)
         src.DstFont->Sources.push_back(&src);
 }
+#endif // END DALAMUD CUSTOM [FONT]
 
 // Render a white-colored bitmap encoded in a string
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 void ImFontAtlasBuildRenderBitmapFromString(ImFontAtlas* atlas, int x, int y, int w, int h, const char* in_str, char in_marker_char)
+#else
+void ImFontAtlasBuildRenderBitmapFromString(ImTextureData* tex, int x, int y, int w, int h, const char* in_str, char in_marker_char)
+#endif // END DALAMUD CUSTOM [FONT]
 {
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     ImTextureData* tex = atlas->TexData;
+#endif // END DALAMUD CUSTOM [FONT]
     IM_ASSERT(x >= 0 && x + w <= tex->Width);
     IM_ASSERT(y >= 0 && y + h <= tex->Height);
 
@@ -4824,8 +4876,13 @@ void ImFontAtlasBuildRenderBitmapFromString(ImFontAtlas* atlas, int x, int y, in
     }
 }
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 static void ImFontAtlasBuildUpdateTexDataBasic(ImFontAtlas* atlas)
+#else
+static void ImFontAtlasBuildUpdateTexDataBasic(ImTextureData* tex, const ImTextureRect& r, ImDrawShapeTexUvs* out)
+#endif // END DALAMUD CUSTOM [FONT]
 {
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     // Pack and store identifier so we can refresh UV coordinates on texture resize.
     // FIXME-NEWATLAS: User/custom rects where user code wants to store UV coordinates will need to do the same thing.
     ImFontAtlasBuilder* builder = atlas->Builder;
@@ -4834,30 +4891,53 @@ static void ImFontAtlasBuildUpdateTexDataBasic(ImFontAtlas* atlas)
     ImFontAtlasRect r;
     bool add_and_draw = (atlas->GetCustomRect(builder->PackIdMouseCursors, &r) == false);
     if (add_and_draw)
+#endif // END DALAMUD CUSTOM [FONT]
     {
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
         builder->PackIdMouseCursors = atlas->AddCustomRect(pack_size.x, pack_size.y, &r);
         IM_ASSERT(builder->PackIdMouseCursors != ImFontAtlasRectId_Invalid);
+#endif // END DALAMUD CUSTOM [FONT]
 
         // Draw to texture
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
         if (atlas->Flags & ImFontAtlasFlags_NoMouseCursors)
         {
             // 2x2 white pixels
             ImFontAtlasBuildRenderBitmapFromString(atlas, r.x, r.y, 2, 2, "XX" "XX", 'X');
         }
         else
+#else
+        if (true)
+#endif // END DALAMUD CUSTOM [FONT]
         {
             // 2x2 white pixels + mouse cursors
             const int x_for_white = r.x;
             const int x_for_black = r.x + FONT_ATLAS_DEFAULT_TEX_DATA_W + 1;
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
             ImFontAtlasBuildRenderBitmapFromString(atlas, x_for_white, r.y, FONT_ATLAS_DEFAULT_TEX_DATA_W, FONT_ATLAS_DEFAULT_TEX_DATA_H, FONT_ATLAS_DEFAULT_TEX_DATA_PIXELS, '.');
             ImFontAtlasBuildRenderBitmapFromString(atlas, x_for_black, r.y, FONT_ATLAS_DEFAULT_TEX_DATA_W, FONT_ATLAS_DEFAULT_TEX_DATA_H, FONT_ATLAS_DEFAULT_TEX_DATA_PIXELS, 'X');
+#else
+            ImFontAtlasBuildRenderBitmapFromString(tex, x_for_white, r.y, FONT_ATLAS_DEFAULT_TEX_DATA_W, FONT_ATLAS_DEFAULT_TEX_DATA_H, FONT_ATLAS_DEFAULT_TEX_DATA_PIXELS, '.');
+            ImFontAtlasBuildRenderBitmapFromString(tex, x_for_black, r.y, FONT_ATLAS_DEFAULT_TEX_DATA_W, FONT_ATLAS_DEFAULT_TEX_DATA_H, FONT_ATLAS_DEFAULT_TEX_DATA_PIXELS, 'X');
+#endif // END DALAMUD CUSTOM [FONT]
         }
     }
 
     // Refresh UV coordinates
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     atlas->TexUvWhitePixel = ImVec2((r.x + 0.5f) * atlas->TexUvScale.x, (r.y + 0.5f) * atlas->TexUvScale.y);
+#else
+    out->WhitePixel = ImVec2((r.x + 0.5f) * out->TexUvScale.x, (r.y + 0.5f) * out->TexUvScale.y);
+    out->MouseCursorsOrigin = ImVec2(r.x, r.y);
+#endif // END DALAMUD CUSTOM [FONT]
 }
 
+// BEGIN DALAMUD CUSTOM [FONT]
+static ImVec2i ImFontAtlasBuildGetTexDataBasicSize()
+{
+    return ImVec2i(2, 2);
+}
+// END DALAMUD CUSTOM [FONT]
 
 #define IM_DRAWLIST_CORNER_POINTS_MAX (IM_DRAWLIST_ARCFAST_TABLE_SIZE / 4 + 3) // Max number of points in corner profiles
 
@@ -4949,24 +5029,35 @@ static ImU8 SampleCornerFillOrStroke(float x, float y, float thickness, const Im
 #define DEBUG_TEX_CORNER_U32(_LX, _H)   0xFFFFFFFF
 #endif
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 static void ImFontAtlasBuildUpdateTexDataCorners(ImFontAtlas* atlas)
+#else
+static void ImFontAtlasBuildUpdateTexDataCorners(ImTextureData* tex, const ImTextureRect& r, ImDrawShapeTexUvs* out)
+#endif // END DALAMUD CUSTOM [FONT]
 {
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     if (atlas->Flags & ImFontAtlasFlags_NoBakedRoundCorners)
         return;
 
     // Pack and store identifier so we can refresh UV coordinates on texture resize.
     ImTextureData* tex = atlas->TexData;
     ImFontAtlasBuilder* builder = atlas->Builder;
+#endif // END DALAMUD CUSTOM [FONT]
 
     // FIXME-TEXCORNERS: Ideally we should pick up the max error from the styles, but it does not seem be to set by the time we build the data the first time.
     float circle_segment_max_error = 0.30f; // Default matching ImGuiStyle::CircleTessellationMaxError.
     //    if (atlas->OwnerContext)
     //        circle_segment_max_error = atlas->OwnerContext->DrawListSharedData.CircleSegmentMaxError;
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     // Calculate size and pack
     ImFontAtlasRect r;
     bool add_and_draw = atlas->GetCustomRect(builder->PackIdCornersTexData, &r) == false;
+#else
+    const bool add_and_draw = true;
+#endif // END DALAMUD CUSTOM [FONT]
     if (add_and_draw)
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     {
         // (thickness 0 for filled, thickness >0 for strokes)
         ImVec2i pack_size(0, 0);
@@ -4988,6 +5079,9 @@ static void ImFontAtlasBuildUpdateTexDataCorners(ImFontAtlas* atlas)
         builder->PackIdCornersTexData = atlas->AddCustomRect(pack_size.x, pack_size.y, &r);
         IM_ASSERT(builder->PackIdCornersTexData != ImFontAtlasRectId_Invalid);
     }
+#else
+    { /* intentionally empty */ }
+#endif // END DALAMUD CUSTOM [FONT]
 
     // Render
     int y = r.y;
@@ -5037,9 +5131,15 @@ static void ImFontAtlasBuildUpdateTexDataCorners(ImFontAtlas* atlas)
             }
 
             // Refresh UV coordinates
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
             ImVec2 uv0 = ImVec2((float)(x + 1), (float)(y + 1)) * atlas->TexUvScale;
             ImVec2 uv1 = ImVec2((float)(x + 1 + size), (float)(y + 1 + size)) * atlas->TexUvScale;
             builder->TexUvCorners[n + thickness * IM_DRAWLIST_TEX_CORNERS_ROUNDING_MAX] = ImVec4(uv0.x, uv0.y, uv1.x, uv1.y);
+#else
+            ImVec2 uv0 = ImVec2((float)(x + 1), (float)(y + 1)) * out->TexUvScale;
+            ImVec2 uv1 = ImVec2((float)(x + 1 + size), (float)(y + 1 + size)) * out->TexUvScale;
+            out->Corners[n + thickness * IM_DRAWLIST_TEX_CORNERS_ROUNDING_MAX] = ImVec4(uv0.x, uv0.y, uv1.x, uv1.y);
+#endif // END DALAMUD CUSTOM [FONT]
 
             x += w;
             row_height = ImMax(row_height, h);
@@ -5048,8 +5148,13 @@ static void ImFontAtlasBuildUpdateTexDataCorners(ImFontAtlas* atlas)
     }
 }
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 static void ImFontAtlasBuildUpdateTexDataLines(ImFontAtlas* atlas)
+#else
+static void ImFontAtlasBuildUpdateTexDataLines(ImTextureData* tex, const ImTextureRect& r, ImDrawShapeTexUvs* out)
+#endif // END DALAMUD CUSTOM [FONT]
 {
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     if (atlas->Flags & ImFontAtlasFlags_NoBakedLines)
         return;
 
@@ -5067,6 +5172,9 @@ static void ImFontAtlasBuildUpdateTexDataLines(ImFontAtlas* atlas)
         builder->PackIdLinesTexData = atlas->AddCustomRect(pack_size.x, pack_size.y, &r);
         IM_ASSERT(builder->PackIdLinesTexData != ImFontAtlasRectId_Invalid);
     }
+#else
+    const bool add_and_draw = true;
+#endif // END DALAMUD CUSTOM [FONT]
 
     {
         // FIXME: Lines 0 to IM_DRAWLIST_TEX_LINES_DETAILED_WIDTH(4) are currently never used and could be ditched, saving DETAILED_WIDTH*WIDTH_MAX
@@ -5102,12 +5210,21 @@ static void ImFontAtlasBuildUpdateTexDataLines(ImFontAtlas* atlas)
             }
 
             // Refresh UV coordinates
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
             ImVec2 uv0 = ImVec2((float)(r.x + pad_left - 0.5f), (float)(r.y + y)) * atlas->TexUvScale;
             ImVec2 uv1 = ImVec2((float)(r.x + pad_left + line_width + 0.5f), (float)(r.y + y + 1)) * atlas->TexUvScale;
+#else
+            ImVec2 uv0 = ImVec2((float)(r.x + pad_left - 0.5f), (float)(r.y + y)) * out->TexUvScale;
+            ImVec2 uv1 = ImVec2((float)(r.x + pad_left + line_width + 0.5f), (float)(r.y + y + 1)) * out->TexUvScale;
+#endif // END DALAMUD CUSTOM [FONT]
             float half_v = (uv0.y + uv1.y) * 0.5f; // Calculate a constant V in the middle of the row to avoid sampling artifacts
             // Store inverse of the line-width (thickness) to the w component so that we can avoid division when selecting texture.
             float inv_line_width = (line_width > 0) ? (1.0f / (float)line_width) : 0.0f;
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
             builder->TexUvLines[n] = ImVec4(uv0.x, uv1.x, half_v, inv_line_width);
+#else
+            out->Lines[n] = ImVec4(uv0.x, uv1.x, half_v, inv_line_width);
+#endif // END DALAMUD CUSTOM [FONT]
         }
     }
 
@@ -5164,18 +5281,100 @@ static void ImFontAtlasBuildUpdateTexDataLines(ImFontAtlas* atlas)
             }
 
             // Refresh UV coordinates
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
             ImVec2 uv0 = ImVec2((float)(r.x + 0.5f), (float)(r.y + y)) * atlas->TexUvScale;
             ImVec2 uv1 = ImVec2((float)(r.x - 0.5f + IM_DRAWLIST_TEX_LINES_SAMPLE_COUNT * 2 + line_width), (float)(r.y + y + 1)) * atlas->TexUvScale;
+#else
+            ImVec2 uv0 = ImVec2((float)(r.x + 0.5f), (float)(r.y + y)) * out->TexUvScale;
+            ImVec2 uv1 = ImVec2((float)(r.x - 0.5f + IM_DRAWLIST_TEX_LINES_SAMPLE_COUNT * 2 + line_width), (float)(r.y + y + 1)) * out->TexUvScale;
+#endif // END DALAMUD CUSTOM [FONT]
             float half_v = (uv0.y + uv1.y) * 0.5f; // Calculate a constant V in the middle of the row to avoid sampling artifacts
             // Store inverse of the line-width (thickness) to the w component so that we can avoid division when selecting texture.
             float inv_line_width = 1.0f / (1.0f + (float)n / (float)IM_DRAWLIST_TEX_LINES_SAMPLE_COUNT);
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
             builder->TexUvLines[IM_DRAWLIST_TEX_LINES_WIDTH_MAX + 1 + n] = ImVec4(uv0.x, uv1.x, half_v, inv_line_width);
+#else
+            out->Lines[IM_DRAWLIST_TEX_LINES_WIDTH_MAX + 1 + n] = ImVec4(uv0.x, uv1.x, half_v, inv_line_width);
+#endif // END DALAMUD CUSTOM [FONT]
         }
     }
 }
 
+// BEGIN DALAMUD CUSTOM [FONT]
+static ImVec2i ImFontAtlasBuildGetTexDataCornersSize()
+{
+    {
+        // thickness 0 for filled, >0 for strokes
+        ImVec2i pack_size(0, 0);
+        for (int thickness = 0; thickness < IM_DRAWLIST_TEX_CORNERS_THICKNESS_MAX; thickness++)
+        {
+            const bool is_filled = (thickness == 0);
+            int row_width = 0;
+            int row_height = 0;
+            for (int n = 0; n < IM_DRAWLIST_TEX_CORNERS_ROUNDING_MAX; n++)
+            {
+                const int rounding = n + 1;
+                const int size = (is_filled ? (rounding + 1) : ImMax(rounding, thickness));
+                row_width += size + 2;
+                row_height = ImMax(row_height, size + 2);
+            }
+            pack_size.x = ImMax(pack_size.x, row_width);
+            pack_size.y += row_height;
+        }
+        return pack_size;
+    }
+}
+
+static ImVec2i ImFontAtlasBuildGetTexDataLinesSize()
+{
+    return ImVec2i(IM_DRAWLIST_TEX_LINES_WIDTH_MAX + 2, IM_DRAWLIST_TEX_LINES_WIDTH_MAX + 1 + IM_DRAWLIST_TEX_LINES_DETAILED_WIDTH_COUNT);
+}
+
+static void ImGuiShapeTexLayout(ImTextureRect* out_basic, ImTextureRect* out_lines, ImTextureRect* out_corners, ImVec2i* out_size)
+{
+    const ImVec2i basic = ImFontAtlasBuildGetTexDataBasicSize();
+    const ImVec2i lines = ImFontAtlasBuildGetTexDataLinesSize();
+    const ImVec2i corners = ImFontAtlasBuildGetTexDataCornersSize();
+    *out_basic = { 0, 0, (unsigned short)basic.x, (unsigned short)basic.y };
+    *out_lines = { 0, (unsigned short)(basic.y + 1), (unsigned short)lines.x, (unsigned short)lines.y };
+    *out_corners = { (unsigned short)(lines.x + 1), (unsigned short)(basic.y + 1), (unsigned short)corners.x, (unsigned short)corners.y };
+    out_size->x = ImMax(basic.x, lines.x + 1 + corners.x);
+    out_size->y = basic.y + 1 + ImMax(lines.y, corners.y);
+}
+
+ImVec2i ImGui::GetShapeTexDataSize()
+{
+    ImTextureRect basic, lines, corners;
+    ImVec2i size;
+    ImGuiShapeTexLayout(&basic, &lines, &corners, &size);
+    return size;
+}
+
+// Render the shape block at the origin.
+void ImGui::RenderShapeTexData(ImTextureData* tex, ImDrawShapeTexUvs* out_uvs)
+{
+    ImTextureRect basic, lines, corners;
+    ImVec2i size;
+    ImGuiShapeTexLayout(&basic, &lines, &corners, &size);
+    IM_ASSERT(tex->Pixels != NULL && size.x <= tex->Width && size.y <= tex->Height);
+
+    for (int ly = 0; ly < size.y; ly++)
+        memset(tex->GetPixelsAt(0, ly), 0, (size_t)size.x * tex->BytesPerPixel);
+
+    ImDrawShapeTexUvs uvs{};
+    uvs.TexUvScale = ImVec2(1.0f / (float)tex->Width, 1.0f / (float)tex->Height);
+    ImFontAtlasBuildUpdateTexDataBasic(tex, basic, &uvs);
+    ImFontAtlasBuildUpdateTexDataLines(tex, lines, &uvs);
+    ImFontAtlasBuildUpdateTexDataCorners(tex, corners, &uvs);
+    ImTextureDataQueueUpload(tex, 0, 0, size.x, size.y);
+    if (out_uvs != NULL)
+        *out_uvs = uvs;
+}
+// END DALAMUD CUSTOM [FONT]
+
 //-----------------------------------------------------------------------------------------------------------------------------
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 // Was tempted to lazily init FontSrc but wouldn't save much + makes it more complicated to detect invalid data at AddFont()
 bool ImFontAtlasFontInitOutput(ImFontAtlas* atlas, ImFont* font)
 {
@@ -7549,6 +7748,7 @@ begin:
     draw_list->_IdxWritePtr = idx_write;
     draw_list->_VtxCurrentIdx = vtx_index;
 }
+#endif // END DALAMUD CUSTOM [FONT]
 
 //-----------------------------------------------------------------------------
 // [SECTION] ImGui Internal Render Helpers
@@ -7795,6 +7995,7 @@ void ImGui::RenderColorRectWithAlphaCheckerboard(ImDrawList* draw_list, ImVec2 p
 // Decompression from stb.h (public domain) by Sean Barrett https://github.com/nothings/stb/blob/master/stb.h
 //-----------------------------------------------------------------------------
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 static unsigned int stb_decompress_length(const unsigned char *input)
 {
     return (input[8] << 24) + (input[9] << 16) + (input[10] << 8) + input[11];
@@ -8358,5 +8559,6 @@ const char* ImGui_GetDefaultCompressedFontDataProggyForever(int* out_size)
     return (const char*)proggy_forever_minimal_ttf_compressed_data;
 }
 #endif // #if !defined(IMGUI_DISABLE_DEFAULT_FONT) && !defined(IMGUI_DISABLE_DEFAULT_FONT_VECTOR)
+#endif // END DALAMUD CUSTOM [FONT]
 
 #endif // #ifndef IMGUI_DISABLE

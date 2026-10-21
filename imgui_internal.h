@@ -457,6 +457,7 @@ enum ImDrawTextFlags_
     ImDrawTextFlags_WrapKeepBlanks      = 1 << 1,
     ImDrawTextFlags_StopOnNewLine       = 1 << 2,
 };
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 IMGUI_API ImVec2        ImFontCalcTextSizeEx(ImFont* font, float size, float max_width, float wrap_width, const char* text_begin, const char* text_end_display, const char* text_end, const char** out_remaining, ImVec2* out_offset, ImDrawTextFlags flags);
 IMGUI_API const char*   ImFontCalcWordWrapPositionEx(ImFont* font, float size, const char* text, const char* text_end, float wrap_width, ImDrawTextFlags flags = 0);
 IMGUI_API const char*   ImTextCalcWordWrapNextLineStart(const char* text, const char* text_end, ImDrawTextFlags flags = 0); // trim trailing space and find beginning of next line
@@ -470,6 +471,7 @@ IMGUI_API void          ImTextInitClassifiers();
 IMGUI_API void          ImTextClassifierClear(ImU32* bits, unsigned int codepoint_min, unsigned int codepoint_end, ImWcharClass char_class);
 IMGUI_API void          ImTextClassifierSetCharClass(ImU32* bits, unsigned int codepoint_min, unsigned int codepoint_end, ImWcharClass char_class, unsigned int c);
 IMGUI_API void          ImTextClassifierSetCharClassFromStr(ImU32* bits, unsigned int codepoint_min, unsigned int codepoint_end, ImWcharClass char_class, const char* s);
+#endif // END DALAMUD CUSTOM [FONT]
 
 // Helpers: File System
 #ifdef IMGUI_DISABLE_FILE_FUNCTIONS
@@ -951,6 +953,10 @@ IMGUI_API ImGuiStoragePair* ImLowerBound(ImGuiStoragePair* in_begin, ImGuiStorag
 #endif
 #define IM_DRAWLIST_TEX_LINES_DETAILED_WIDTH_COUNT  ((IM_DRAWLIST_TEX_LINES_DETAILED_WIDTH - 1) * IM_DRAWLIST_TEX_LINES_SAMPLE_COUNT + 1)
 
+// BEGIN DALAMUD CUSTOM [FONT]
+#include "imgui_dalamud_text_internal.h"
+// END DALAMUD CUSTOM [FONT]
+
 // Data shared between all ImDrawList instances
 // Conceptually this could have been called e.g. ImDrawListSharedContext
 // Typically one ImGui context would create and maintain one of this.
@@ -963,6 +969,12 @@ struct IMGUI_API ImDrawListSharedData
     ImFontAtlas*    FontAtlas;                  // Current font atlas
     ImFont*         Font;                       // Current font (used for simplified AddText overload)
     float           FontSize;                   // Current font size (used for simplified AddText overload)
+    // BEGIN DALAMUD CUSTOM [FONT]
+    ImDrawShapeTexUvs ShapeTexUvs;              // UVs within ShapeTex/custom textures with the block, for use with TexUv*
+    ImTextureData*  ShapeTex;                   // ImGui-owned base shape texture
+    ImTextLayoutFn  TextLayoutFn;               // See ImGui::SetTextCallbacks()
+    ImFontMetricsFn FontMetricsFn;              // See ImGui::SetTextCallbacks()
+    // END DALAMUD CUSTOM [FONT]
     float           FontScale;                  // Current font scale (== FontSize / Font->FontSize)
     float           CurveTessellationMaxError;  // Tessellation tolerance when using PathBezierCurveTo()
     float           CircleTessellationMaxError; // Number of circle segments to use per pixel of radius for AddCircle() etc
@@ -2799,8 +2811,12 @@ struct ImGuiContext
     ImGuiInputTextState     InputTextState;
     ImGuiTextIndex          InputTextLineIndex;                 // Temporary storage
     ImGuiInputTextDeactivatedState InputTextDeactivatedState;
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     ImFontBaked             InputTextPasswordFontBackupBaked;
     ImFontFlags             InputTextPasswordFontBackupFlags;
+#else
+    int                     InputTextPasswordMaskCount;         // > 0 while PushPasswordFont() is active
+#endif // END DALAMUD CUSTOM [FONT]
     ImGuiID                 InputTextReactivateId;              // ID of InputText to reactivate on next frame (for io.ConfigInputTextEnterKeepActive behavior)
     ImGuiID                 TempInputId;                        // Temporary text input when using Ctrl+Click on a slider, etc.
     ImGuiDataTypeStorage    DataTypeZeroValue;                  // 0 for all data types
@@ -3693,8 +3709,10 @@ namespace ImGui
     // Fonts, drawing
     IMGUI_API void          RegisterUserTexture(ImTextureData* tex); // Register external texture. EXPERIMENTAL.
     IMGUI_API void          UnregisterUserTexture(ImTextureData* tex);
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     IMGUI_API void          RegisterFontAtlas(ImFontAtlas* atlas);
     IMGUI_API void          UnregisterFontAtlas(ImFontAtlas* atlas);
+#endif // END DALAMUD CUSTOM [FONT]
     IMGUI_API void          SetCurrentFont(ImFont* font, float font_size_before_scaling, float font_size_after_scaling);
     IMGUI_API void          UpdateCurrentFontSize(float restore_font_size_after_scaling);
     IMGUI_API void          SetPixelDensity(float pixel_density); // was SetFontRasterizerDensity()
@@ -4225,17 +4243,23 @@ namespace ImGui
     IMGUI_API void          DebugBreakClearData();
     IMGUI_API bool          DebugBreakButton(const char* label, const char* description_of_location);
     IMGUI_API void          DebugBreakButtonTooltip(bool keyboard_only, const char* description_of_location);
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     IMGUI_API void          ShowFontAtlas(ImFontAtlas* atlas);
+#endif // END DALAMUD CUSTOM [FONT]
     IMGUI_API ImU64         DebugTextureIDToU64(ImTextureID tex_id);
     IMGUI_API void          DebugHookIdInfo(ImGuiID id, ImGuiDataType data_type, const void* data_id, const void* data_id_end);
     IMGUI_API void          DebugNodeColumns(ImGuiOldColumns* columns);
     IMGUI_API void          DebugNodeDockNode(ImGuiDockNode* node, const char* label);
     IMGUI_API void          DebugNodeDrawList(ImGuiWindow* window, ImGuiViewportP* viewport, const ImDrawList* draw_list, const char* label);
     IMGUI_API void          DebugNodeDrawCmdShowMeshAndBoundingBox(ImDrawList* out_draw_list, const ImDrawList* draw_list, const ImDrawCmd* draw_cmd, bool show_mesh, bool show_aabb);
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     IMGUI_API void          DebugNodeFont(ImFont* font);
     IMGUI_API void          DebugNodeFontGlyphsForSrcMask(ImFont* font, ImFontBaked* baked, int src_mask);
     IMGUI_API void          DebugNodeFontGlyph(ImFont* font, const ImFontGlyph* glyph);
     IMGUI_API void          DebugNodeTexture(ImTextureData* tex, int int_id, const ImFontAtlasRect* highlight_rect = NULL); // ID used to facilitate persisting the "current" texture.
+#else
+    IMGUI_API void          DebugNodeTexture(ImTextureData* tex, int int_id, const ImTextureRect* highlight_rect = NULL); // ID used to facilitate persisting the "current" texture.
+#endif // END DALAMUD CUSTOM [FONT]
     IMGUI_API void          DebugNodeStorage(ImGuiStorage* storage, const char* label);
     IMGUI_API void          DebugNodeTabBar(ImGuiTabBar* tab_bar, const char* label);
     IMGUI_API void          DebugNodeTable(ImGuiTable* table);
@@ -4273,6 +4297,7 @@ namespace ImGui
 // [SECTION] ImFontLoader
 //-----------------------------------------------------------------------------
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 // Hooks and storage for a given font backend.
 // This structure is likely to evolve as we add support for incremental atlas updates.
 // Conceptually this could be public, but API is still going to be evolve.
@@ -4302,19 +4327,23 @@ IMGUI_API const ImFontLoader* ImFontAtlasGetFontLoaderForStbTruetype();
 #ifndef IMGUI_DISABLE_OBSOLETE_FUNCTIONS
 typedef ImFontLoader ImFontBuilderIO; // [renamed/changed in 1.92.0] The types are not actually compatible but we provide this as a compile-time error report helper.
 #endif
+#endif // END DALAMUD CUSTOM [FONT]
 
 //-----------------------------------------------------------------------------
 // [SECTION] ImFontAtlas internal API
 //-----------------------------------------------------------------------------
 
 #define IMGUI_FONT_SIZE_MAX                                     (512.0f)
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 #define IMGUI_FONT_SIZE_THRESHOLD_FOR_LOADADVANCEXONLYMODE      (128.0f)
+#endif // END DALAMUD CUSTOM [FONT]
 
 // Helpers: ImTextureRef ==/!= operators provided as convenience
 // (note that _TexID and _TexData are never set simultaneously)
 inline bool operator==(const ImTextureRef& lhs, const ImTextureRef& rhs)    { return lhs._TexID == rhs._TexID && lhs._TexData == rhs._TexData; }
 inline bool operator!=(const ImTextureRef& lhs, const ImTextureRef& rhs)    { return lhs._TexID != rhs._TexID || lhs._TexData != rhs._TexData; }
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 // Refer to ImFontAtlasPackGetRect() to better understand how this works.
 #define ImFontAtlasRectId_IndexMask_        (0x0007FFFF)    // 20-bits signed: index to access builder->RectsIndex[].
 #define ImFontAtlasRectId_GenerationMask_   (0x3FF00000)    // 10-bits: entry generation, so each ID is unique and get can safely detected old identifiers.
@@ -4456,6 +4485,7 @@ IMGUI_API void              ImFontAtlasTextureBlockPostProcessMultiply(ImFontAtl
 IMGUI_API void              ImFontAtlasTextureBlockFill(ImTextureData* dst_tex, int dst_x, int dst_y, int w, int h, ImU32 col);
 IMGUI_API void              ImFontAtlasTextureBlockCopy(ImTextureData* src_tex, int src_x, int src_y, ImTextureData* dst_tex, int dst_x, int dst_y, int w, int h);
 IMGUI_API void              ImFontAtlasTextureBlockQueueUpload(ImFontAtlas* atlas, ImTextureData* tex, int x, int y, int w, int h);
+#endif // END DALAMUD CUSTOM [FONT]
 
 IMGUI_API bool              ImTextureDataUpdateNewFrame(ImTextureData* tex);
 IMGUI_API void              ImTextureDataQueueUpload(ImTextureData* tex, int x, int y, int w, int h);
@@ -4463,11 +4493,13 @@ IMGUI_API int               ImTextureDataGetFormatBytesPerPixel(ImTextureFormat 
 IMGUI_API const char*       ImTextureDataGetStatusName(ImTextureStatus status);
 IMGUI_API const char*       ImTextureDataGetFormatName(ImTextureFormat format);
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
 #ifndef IMGUI_DISABLE_DEBUG_TOOLS
 IMGUI_API void              ImFontAtlasDebugLogTextureRequests(ImFontAtlas* atlas);
 #endif
 
 IMGUI_API bool      ImFontAtlasGetMouseCursorTexData(ImFontAtlas* atlas, ImGuiMouseCursor cursor_type, ImVec2* out_offset, ImVec2* out_size, ImVec2 out_uv_border[2], ImVec2 out_uv_fill[2]);
+#endif // END DALAMUD CUSTOM [FONT]
 
 //-----------------------------------------------------------------------------
 // [SECTION] Test Engine specific hooks (imgui_test_engine)

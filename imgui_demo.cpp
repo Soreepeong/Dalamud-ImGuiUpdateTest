@@ -1938,8 +1938,13 @@ static void DemoWindowWidgetsFonts()
     if (ImGui::TreeNode("Fonts"))
     {
         IMGUI_DEMO_MARKER("Widgets/Fonts");
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
         ImFontAtlas* atlas = ImGui::GetIO().Fonts;
         ImGui::ShowFontAtlas(atlas);
+#else
+        ImFont* font = ImGui::GetFont();
+        ImGui::Text("Current font: %p", (void*)font);
+#endif // END DALAMUD CUSTOM [FONT]
         // FIXME-NEWATLAS: Provide a demo to add/create a procedural font?
         ImGui::TreePop();
     }
@@ -1975,11 +1980,19 @@ static void DemoWindowWidgetsImages()
         // - Read https://github.com/ocornut/imgui/blob/master/docs/FAQ.md
         // - Read https://github.com/ocornut/imgui/wiki/Image-Loading-and-Displaying-Examples
 
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
         // Grab the current texture identifier used by the font atlas.
         ImFontAtlas* atlas = io.Fonts;
         ImTextureRef my_tex_id = atlas->TexRef;
         float my_tex_w = (float)atlas->TexData->Width; // Regular user code should never have to care about TexData-> fields, but since we want to display the entire texture here, we pull Width/Height from it.
         float my_tex_h = (float)atlas->TexData->Height;
+#else
+        IM_UNUSED(io);
+        ImTextureData* shape_tex = ImGui::GetShapeTexture();
+        ImTextureRef my_tex_id = shape_tex->GetTexRef();
+        float my_tex_w = (float)shape_tex->Width;
+        float my_tex_h = (float)shape_tex->Height;
+#endif // END DALAMUD CUSTOM [FONT]
         ImGui::Text("%.0fx%.0f", my_tex_w, my_tex_h);
 
         // Basic drawing
@@ -8692,8 +8705,10 @@ void ImGui::ShowAboutWindow(bool* p_open)
         if (io.BackendFlags & ImGuiBackendFlags_RendererHasTextures)    ImGui::Text(" RendererHasTextures");
         if (io.BackendFlags & ImGuiBackendFlags_RendererHasViewports)   ImGui::Text(" RendererHasViewports");
         ImGui::Separator();
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
         ImGui::Text("io.Fonts: %d fonts, Flags: 0x%08X, TexSize: %d,%d", io.Fonts->Fonts.Size, io.Fonts->Flags, io.Fonts->TexData->Width, io.Fonts->TexData->Height);
         ImGui::Text("io.Fonts->FontLoaderName: %s", io.Fonts->FontLoaderName ? io.Fonts->FontLoaderName : "NULL");
+#endif // END DALAMUD CUSTOM [FONT]
         ImGui::Text("io.DisplaySize: %.2f,%.2f", io.DisplaySize.x, io.DisplaySize.y);
         ImGui::Text("io.DisplayFramebufferScale: %.2f,%.2f", io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
         ImGui::Separator();
@@ -8798,7 +8813,9 @@ void ImGui::ShowStyleEditor(ImGuiStyle* ref)
 
         if (ShowStyleSelector("Colors##Selector"))
             ref_saved_style = style;
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
         ShowFontSelector("Fonts##Selector");
+#endif // END DALAMUD CUSTOM [FONT]
         if (DragFloat("FontSizeBase", &style.FontSizeBase, 0.20f, 5.0f, 100.0f, "%.0f"))
             style._NextFrameFontSizeBase = style.FontSizeBase; // FIXME: Temporary hack until we finish remaining work.
         SameLine(0.0f, 0.0f); Text(" (out %.2f)", GetFontSize());
@@ -9015,8 +9032,11 @@ void ImGui::ShowStyleEditor(ImGuiStyle* ref)
         if (BeginTabItem("Fonts"))
         {
             ImGuiIO& io = GetIO();
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
             ImFontAtlas* atlas = io.Fonts;
             ShowFontAtlas(atlas);
+#endif // END DALAMUD CUSTOM [FONT]
+            IM_UNUSED(io); // DALAMUD CUSTOM [FONT]
 
             // Post-baking font scaling. Note that this is NOT the nice way of scaling fonts, read below.
             // (we enforce hard clamping manually as by default DragFloat/SliderFloat allows Ctrl+Click text to get out of bounds).
@@ -9658,10 +9678,17 @@ static void ShowExampleAppConsole(bool* p_open)
 
 static void ShowExampleAppImageViewer(bool* p_open)
 {
+#if 0 // BEGIN DALAMUD CUSTOM [FONT]
     ImFontAtlas* atlas = ImGui::GetIO().Fonts;
     ImTextureRef tex_ref = atlas->TexRef; // We don't have access to other textures in this demo!
     int tex_w = atlas->TexData->Width;
     int tex_h = atlas->TexData->Height;
+#else
+    ImTextureData* atlas = ImGui::GetShapeTexture();
+    ImTextureRef tex_ref = atlas->GetTexRef(); // We don't have access to other textures in this demo!
+    int tex_w = atlas->Width;
+    int tex_h = atlas->Height;
+#endif // END DALAMUD CUSTOM [FONT]
     if (ImGui::Begin("Example: Image Viewer", p_open))
     {
         static ExampleImageViewerData image_viewer;
