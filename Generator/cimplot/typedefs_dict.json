@@ -10,6 +10,7 @@
   "ImPlotBarGroupsFlags": "int",
   "ImPlotBarsFlags": "int",
   "ImPlotBin": "int",
+  "ImPlotBubbleFlags": "int",
   "ImPlotCol": "int",
   "ImPlotColormap": "int",
   "ImPlotColormapData": "struct ImPlotColormapData",
