@@ -26,6 +26,17 @@ public static unsafe partial class ImGuiNative
         delegate*<ImDrawList*, ImDrawCmd*, void> callback,
         void* callbackData = null);
 
+    /// <summary>Sets the host text callbacks (imgui_dalamud_text.h) as function pointers.</summary>
+    /// <param name="layout">Creates layouts:
+    /// <c>ImHRESULT (ImFont*, const ImTextDesc*, const char*, const char*, ImTextLayout** out_layout)</c>.</param>
+    /// <param name="metrics">Gives font metrics:
+    /// <c>void (ImFont*, float size, float density, ImTextMetricsFlags flags, ImTextMetrics*)</c>.</param>
+    [LibraryImport(LibraryName, EntryPoint = "igSetTextCallbacks")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    public static partial void SetTextCallbacks(
+        delegate* unmanaged[Cdecl]<ImFont*, ImTextDesc*, byte*, byte*, ImTextLayout**, int> layout,
+        delegate* unmanaged[Cdecl]<ImFont*, float, float, ImTextMetricsFlags, ImTextMetrics*, void> metrics);
+
     [LibraryImport(LibraryName, EntryPoint = "igInputTextEx")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial byte InputTextEx(

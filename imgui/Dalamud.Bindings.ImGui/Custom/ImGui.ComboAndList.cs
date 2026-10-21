@@ -124,8 +124,8 @@ public static unsafe partial class ImGui
             var r = ImGuiNative.Combo(
                         labelPtr,
                         currentItemPtr,
-                        (delegate*<byte*, int*, delegate*<void*, int, byte**, bool>, void*, int, int, bool>)
-                        (nint)(delegate* unmanaged<void*, int, byte**, bool>)&PopulateUtf8BufferInContextStatic,
+                        (delegate*<byte*, int*, delegate*<void*, int, byte*>, void*, int, int, byte*>)
+                        (nint)(delegate* unmanaged<void*, int, byte*>)&PopulateUtf8BufferInContextStatic,
                         &dataBuffer,
                         itemsCount,
                         popupMaxHeightInItems) != 0;
@@ -151,8 +151,8 @@ public static unsafe partial class ImGui
             var r = ImGuiNative.Combo(
                         labelPtr,
                         currentItemPtr,
-                        (delegate*<byte*, int*, delegate*<void*, int, byte**, bool>, void*, int, int, bool>)
-                        (nint)(delegate* unmanaged<void*, int, byte**, bool>)&PopulateUtf8BufferRefContextStatic,
+                        (delegate*<byte*, int*, delegate*<void*, int, byte*>, void*, int, int, byte*>)
+                        (nint)(delegate* unmanaged<void*, int, byte*>)&PopulateUtf8BufferRefContextStatic,
                         &dataBuffer,
                         itemsCount,
                         popupMaxHeightInItems) != 0;
@@ -176,8 +176,8 @@ public static unsafe partial class ImGui
             var r = ImGuiNative.Combo(
                         labelPtr,
                         currentItemPtr,
-                        (delegate*<byte*, int*, delegate*<void*, int, byte**, bool>, void*, int, int, bool>)
-                        (nint)(delegate* unmanaged<void*, int, byte**, bool>)&PopulateUtf8BufferStatic,
+                        (delegate*<byte*, int*, delegate*<void*, int, byte*>, void*, int, int, byte*>)
+                        (nint)(delegate* unmanaged<void*, int, byte*>)&PopulateUtf8BufferStatic,
                         &dataBuffer,
                         itemsCount,
                         popupMaxHeightInItems) != 0;
@@ -277,8 +277,8 @@ public static unsafe partial class ImGui
             var r = ImGuiNative.ListBox(
                         labelPtr,
                         currentItemPtr,
-                        (delegate*<byte*, int*, delegate*<void*, int, byte**, bool>, void*, int, int, bool>)
-                        (nint)(delegate* unmanaged<void*, int, byte**, bool>)&PopulateUtf8BufferRefContextStatic,
+                        (delegate*<byte*, int*, delegate*<void*, int, byte*>, void*, int, int, byte*>)
+                        (nint)(delegate* unmanaged<void*, int, byte*>)&PopulateUtf8BufferRefContextStatic,
                         &dataBuffer,
                         itemsCount,
                         heightInItems) != 0;
@@ -304,8 +304,8 @@ public static unsafe partial class ImGui
             var r = ImGuiNative.ListBox(
                         labelPtr,
                         currentItemPtr,
-                        (delegate*<byte*, int*, delegate*<void*, int, byte**, bool>, void*, int, int, bool>)
-                        (nint)(delegate* unmanaged<void*, int, byte**, bool>)&PopulateUtf8BufferInContextStatic,
+                        (delegate*<byte*, int*, delegate*<void*, int, byte*>, void*, int, int, byte*>)
+                        (nint)(delegate* unmanaged<void*, int, byte*>)&PopulateUtf8BufferInContextStatic,
                         &dataBuffer,
                         itemsCount,
                         heightInItems) != 0;
@@ -329,8 +329,8 @@ public static unsafe partial class ImGui
             var r = ImGuiNative.ListBox(
                         labelPtr,
                         currentItemPtr,
-                        (delegate*<byte*, int*, delegate*<void*, int, byte**, bool>, void*, int, int, bool>)
-                        (nint)(delegate* unmanaged<void*, int, byte**, bool>)&PopulateUtf8BufferStatic,
+                        (delegate*<byte*, int*, delegate*<void*, int, byte*>, void*, int, int, byte*>)
+                        (nint)(delegate* unmanaged<void*, int, byte*>)&PopulateUtf8BufferStatic,
                         &dataBuffer,
                         itemsCount,
                         heightInItems) != 0;
@@ -341,44 +341,41 @@ public static unsafe partial class ImGui
     }
 
     [UnmanagedCallersOnly]
-    private static bool PopulateUtf8BufferRefContextStatic(void* data, int index, byte** text)
+    private static byte* PopulateUtf8BufferRefContextStatic(void* data, int index)
     {
 #pragma warning disable CS8500 // This takes the address of, gets the size of, or declares a pointer to a managed type
         ref var s = ref PointerTuple.From<PopulateAutoUtf8BufferRefContextDelegate<object>, ImU8String, object>(data);
         s.Item2.Recycle();
         s.Item2 = s.Item1.Invoke(ref s.Item3, index);
         if (s.Item2.IsNull)
-            return false;
-        *text = (byte*)Unsafe.AsPointer(ref Unsafe.AsRef(in s.Item2.GetPinnableNullTerminatedReference()));
-        return true;
+            return null;
+        return (byte*)Unsafe.AsPointer(ref Unsafe.AsRef(in s.Item2.GetPinnableNullTerminatedReference()));
 #pragma warning restore CS8500 // This takes the address of, gets the size of, or declares a pointer to a managed type
     }
 
     [UnmanagedCallersOnly]
-    private static bool PopulateUtf8BufferInContextStatic(void* data, int index, byte** text)
+    private static byte* PopulateUtf8BufferInContextStatic(void* data, int index)
     {
 #pragma warning disable CS8500 // This takes the address of, gets the size of, or declares a pointer to a managed type
         ref var s = ref PointerTuple.From<PopulateAutoUtf8BufferInContextDelegate<object>, ImU8String, object>(data);
         s.Item2.Recycle();
         s.Item2 = s.Item1.Invoke(s.Item3, index);
         if (s.Item2.IsNull)
-            return false;
-        *text = (byte*)Unsafe.AsPointer(ref Unsafe.AsRef(in s.Item2.GetPinnableNullTerminatedReference()));
-        return true;
+            return null;
+        return (byte*)Unsafe.AsPointer(ref Unsafe.AsRef(in s.Item2.GetPinnableNullTerminatedReference()));
 #pragma warning restore CS8500 // This takes the address of, gets the size of, or declares a pointer to a managed type
     }
 
     [UnmanagedCallersOnly]
-    private static bool PopulateUtf8BufferStatic(void* data, int index, byte** text)
+    private static byte* PopulateUtf8BufferStatic(void* data, int index)
     {
 #pragma warning disable CS8500 // This takes the address of, gets the size of, or declares a pointer to a managed type
         ref var s = ref PointerTuple.From<PopulateAutoUtf8BufferDelegate, ImU8String>(data);
         s.Item2.Recycle();
         s.Item2 = s.Item1.Invoke(index);
         if (s.Item2.IsNull)
-            return false;
-        *text = (byte*)Unsafe.AsPointer(ref Unsafe.AsRef(in s.Item2.GetPinnableNullTerminatedReference()));
-        return true;
+            return null;
+        return (byte*)Unsafe.AsPointer(ref Unsafe.AsRef(in s.Item2.GetPinnableNullTerminatedReference()));
 #pragma warning restore CS8500 // This takes the address of, gets the size of, or declares a pointer to a managed type
     }
 }

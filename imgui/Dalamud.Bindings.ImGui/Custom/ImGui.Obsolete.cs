@@ -1,0 +1,98 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
+
+namespace Dalamud.Bindings.ImGui;
+
+/// <summary>
+/// Functions that were removed from Dear ImGui, or are only available when <c>IMGUI_DISABLE_OBSOLETE_FUNCTIONS</c> is
+/// not defined. Implemented the same way as Dear ImGui's obsolete implementations.
+/// </summary>
+[SuppressMessage("ReSharper", "InconsistentNaming")]
+public static unsafe partial class ImGui
+{
+    /// <summary>Pushes a font, keeping the current size. Obsoleted in 1.92.0. Fonts no longer have a default size, so
+    /// this no longer switches to the size the font was loaded with.</summary>
+    /// <param name="font">The font.</param>
+    public static void PushFont(ImFontPtr font) => PushFont(font, 0.0f);
+
+    /// <summary>Obsoleted in 1.90.0.</summary>
+    /// <returns>Current content boundaries in window coordinates.</returns>
+    public static Vector2 GetContentRegionMax()
+    {
+        var g = GetCurrentContext();
+        var window = ImGuiP.GetCurrentWindow();
+        var mx = window.DC.CurrentColumns is not null || !g.CurrentTable.IsNull
+                     ? window.WorkRect.Max
+                     : window.ContentRegionRect.Max;
+        return mx - window.Pos;
+    }
+
+    /// <summary>Obsoleted in 1.90.0.</summary>
+    /// <returns>Content boundaries min for the window, in window coordinates.</returns>
+    public static Vector2 GetWindowContentRegionMin()
+    {
+        var window = ImGuiP.GetCurrentWindow();
+        return window.ContentRegionRect.Min - window.Pos;
+    }
+
+    /// <summary>Obsoleted in 1.90.0.</summary>
+    /// <returns>Content boundaries max for the window, in window coordinates.</returns>
+    public static Vector2 GetWindowContentRegionMax()
+    {
+        var window = ImGuiP.GetCurrentWindow();
+        return window.ContentRegionRect.Max - window.Pos;
+    }
+
+    /// <summary>Sets the font scale of the current window. Obsoleted in 1.92.0.</summary>
+    /// <param name="scale">The scale.</param>
+    public static void SetWindowFontScale(float scale)
+    {
+        var window = ImGuiP.GetCurrentWindow();
+        window.FontWindowScale = scale;
+        ImGuiP.UpdateCurrentFontSize(0.0f);
+    }
+
+    /// <summary>Obsoleted in 1.90.0.</summary>
+    /// <param name="id">The ID.</param>
+    /// <param name="size">The size.</param>
+    /// <param name="flags">The window flags.</param>
+    /// <returns>Whether the child frame is visible.</returns>
+    public static bool BeginChildFrame(uint id, Vector2 size, ImGuiWindowFlags flags = ImGuiWindowFlags.None) =>
+        ImGuiNative.BeginChild(id, size, ImGuiChildFlags.FrameStyle, flags) != 0;
+
+    /// <summary>Obsoleted in 1.90.0.</summary>
+    public static void EndChildFrame() => EndChild();
+
+    /// <summary>Obsoleted in 1.89.0.</summary>
+    /// <param name="userTextureId">The texture.</param>
+    /// <param name="size">The image size.</param>
+    /// <param name="uv0">The UV of the top left corner.</param>
+    /// <param name="uv1">The UV of the bottom right corner.</param>
+    /// <param name="framePadding">The frame padding, or a negative value to use the style.</param>
+    /// <param name="bgCol">The background color.</param>
+    /// <param name="tintCol">The tint color.</param>
+    /// <returns>Whether the button has been pressed.</returns>
+    public static bool ImageButton(
+        ImTextureID userTextureId, Vector2 size, Vector2 uv0, Vector2 uv1, int framePadding, Vector4 bgCol,
+        Vector4 tintCol)
+    {
+        var window = ImGuiP.GetCurrentWindow();
+        if (window.SkipItems)
+            return false;
+
+        PushID((void*)userTextureId.Handle);
+        var id = ImGuiP.GetID(window, "#image"u8);
+        PopID();
+
+        if (framePadding >= 0)
+            PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(framePadding, framePadding));
+        var ret = ImGuiP.ImageButtonEx(id, userTextureId, size, uv0, uv1, bgCol, tintCol);
+        if (framePadding >= 0)
+            PopStyleVar();
+        return ret;
+    }
+
+    /// <inheritdoc cref="ImageButton(ImTextureID, Vector2, Vector2, Vector2, int, Vector4, Vector4)"/>
+    public static bool ImageButton(ImTextureID userTextureId, Vector2 size) =>
+        ImageButton(userTextureId, size, Vector2.Zero, Vector2.One, -1, Vector4.Zero, Vector4.One);
+}

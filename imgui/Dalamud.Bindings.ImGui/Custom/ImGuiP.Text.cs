@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Dalamud.Bindings.ImGui;
@@ -14,6 +15,21 @@ public static unsafe partial class ImGuiP
         if ((g->DebugLogFlags & ImGuiDebugLogFlags.OutputToTty) != ImGuiDebugLogFlags.None)
             Debug.Write(text.ToString());
         text.Recycle();
+    }
+
+    /// <summary>Gets the layout parameters of text in the current font, as ImGui lays it out.</summary>
+    /// <param name="desc">Receives the layout parameters.</param>
+    /// <param name="wrapWidth">Wrap width. 0 or less disables wrapping.</param>
+    /// <param name="flags">Layout flags.</param>
+    /// <param name="drawList">The draw list to take the font size and pixel density from, or null for the current
+    /// context's.</param>
+    public static void GetTextDesc(
+        out ImTextDesc desc, float wrapWidth = 0.0f, ImTextLayoutFlags flags = ImTextLayoutFlags.None,
+        ImDrawListPtr drawList = default)
+    {
+        Unsafe.SkipInit(out desc);
+        fixed (ImTextDesc* p = &desc)
+            ImGuiPNative.GetTextDesc(p, wrapWidth, flags, drawList);
     }
 
     public static int FindRenderedTextEnd(
@@ -46,8 +62,8 @@ public static unsafe partial class ImGuiP
             var seed = *self.IDStack.Back;
             var id = ImGuiPNative.ImHashStr(strPtr, (nuint)str.Length, seed);
             var g = ImGui.GetCurrentContext();
-            if (g.DebugHookIdInfo == id)
-                DebugHookIdInfo(id, (ImGuiDataType)ImGuiDataTypePrivate.String, strPtr, strPtr + str.Length);
+            if (g.DebugHookIdInfoId == id)
+                DebugHookIdInfo(id, ImGuiDataType.String, strPtr, strPtr + str.Length);
             str.Recycle();
             return id;
         }
@@ -193,7 +209,7 @@ public static unsafe partial class ImGuiP
     }
 
     public static void RenderTextEllipsis(
-        ImDrawListPtr drawList, scoped in Vector2 posMin, scoped in Vector2 posMax, float clipMaxX, float ellipsisMaxX,
+        ImDrawListPtr drawList, scoped in Vector2 posMin, scoped in Vector2 posMax, float ellipsisMaxX,
         ImU8String text, scoped in Vector2? textSizeIfKnown = null)
     {
         var textSizeIfKnownOrDefault = textSizeIfKnown ?? default;
@@ -202,7 +218,6 @@ public static unsafe partial class ImGuiP
                 drawList.Handle,
                 posMin,
                 posMax,
-                clipMaxX,
                 ellipsisMaxX,
                 textPtr,
                 textPtr + text.Length,

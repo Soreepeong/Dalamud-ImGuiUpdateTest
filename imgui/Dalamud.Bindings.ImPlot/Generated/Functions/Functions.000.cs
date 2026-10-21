@@ -442,12 +442,12 @@ namespace Dalamud.Bindings.ImPlot
 		/// To be documented.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal static void SizeNative(ImPlotPoint* pOut, ImPlotRect* self)
+		internal static ImPlotPoint SizeNative(ImPlotRect* self)
 		{
 			#if NET5_0_OR_GREATER
-			((delegate* unmanaged[Cdecl]<ImPlotPoint*, ImPlotRect*, void>)funcTable[15])(pOut, self);
+			return ((delegate* unmanaged[Cdecl]<ImPlotRect*, ImPlotPoint>)funcTable[15])(self);
 			#else
-			((delegate* unmanaged[Cdecl]<nint, nint, void>)funcTable[15])((nint)pOut, (nint)self);
+			return (ImPlotPoint)((delegate* unmanaged[Cdecl]<nint, ImPlotPoint>)funcTable[15])((nint)self);
 			#endif
 		}
 
@@ -456,28 +456,8 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static ImPlotPoint Size(ImPlotRectPtr self)
 		{
-			ImPlotPoint ret;
-			SizeNative(&ret, self);
+			ImPlotPoint ret = SizeNative(self);
 			return ret;
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Size(ImPlotPointPtr pOut, ImPlotRectPtr self)
-		{
-			SizeNative(pOut, self);
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Size(ref ImPlotPoint pOut, ImPlotRectPtr self)
-		{
-			fixed (ImPlotPoint* ppOut = &pOut)
-			{
-				SizeNative((ImPlotPoint*)ppOut, self);
-			}
 		}
 
 		/// <summary>
@@ -487,8 +467,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (ImPlotRect* pself = &self)
 			{
-				ImPlotPoint ret;
-				SizeNative(&ret, (ImPlotRect*)pself);
+				ImPlotPoint ret = SizeNative((ImPlotRect*)pself);
 				return ret;
 			}
 		}
@@ -496,38 +475,13 @@ namespace Dalamud.Bindings.ImPlot
 		/// <summary>
 		/// To be documented.
 		/// </summary>
-		public static void Size(ImPlotPointPtr pOut, ref ImPlotRect self)
-		{
-			fixed (ImPlotRect* pself = &self)
-			{
-				SizeNative(pOut, (ImPlotRect*)pself);
-			}
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Size(ref ImPlotPoint pOut, ref ImPlotRect self)
-		{
-			fixed (ImPlotPoint* ppOut = &pOut)
-			{
-				fixed (ImPlotRect* pself = &self)
-				{
-					SizeNative((ImPlotPoint*)ppOut, (ImPlotRect*)pself);
-				}
-			}
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal static void ClampNative(ImPlotPoint* pOut, ImPlotRect* self, ImPlotPoint p)
+		internal static ImPlotPoint ClampNative(ImPlotRect* self, ImPlotPoint p)
 		{
 			#if NET5_0_OR_GREATER
-			((delegate* unmanaged[Cdecl]<ImPlotPoint*, ImPlotRect*, ImPlotPoint, void>)funcTable[16])(pOut, self, p);
+			return ((delegate* unmanaged[Cdecl]<ImPlotRect*, ImPlotPoint, ImPlotPoint>)funcTable[16])(self, p);
 			#else
-			((delegate* unmanaged[Cdecl]<nint, nint, ImPlotPoint, void>)funcTable[16])((nint)pOut, (nint)self, p);
+			return (ImPlotPoint)((delegate* unmanaged[Cdecl]<nint, ImPlotPoint, ImPlotPoint>)funcTable[16])((nint)self, p);
 			#endif
 		}
 
@@ -536,28 +490,8 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static ImPlotPoint Clamp(ImPlotRectPtr self, ImPlotPoint p)
 		{
-			ImPlotPoint ret;
-			ClampNative(&ret, self, p);
+			ImPlotPoint ret = ClampNative(self, p);
 			return ret;
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Clamp(ImPlotPointPtr pOut, ImPlotRectPtr self, ImPlotPoint p)
-		{
-			ClampNative(pOut, self, p);
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Clamp(ref ImPlotPoint pOut, ImPlotRectPtr self, ImPlotPoint p)
-		{
-			fixed (ImPlotPoint* ppOut = &pOut)
-			{
-				ClampNative((ImPlotPoint*)ppOut, self, p);
-			}
 		}
 
 		/// <summary>
@@ -567,8 +501,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (ImPlotRect* pself = &self)
 			{
-				ImPlotPoint ret;
-				ClampNative(&ret, (ImPlotRect*)pself, p);
+				ImPlotPoint ret = ClampNative((ImPlotRect*)pself, p);
 				return ret;
 			}
 		}
@@ -576,38 +509,13 @@ namespace Dalamud.Bindings.ImPlot
 		/// <summary>
 		/// To be documented.
 		/// </summary>
-		public static void Clamp(ImPlotPointPtr pOut, ref ImPlotRect self, ImPlotPoint p)
-		{
-			fixed (ImPlotRect* pself = &self)
-			{
-				ClampNative(pOut, (ImPlotRect*)pself, p);
-			}
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Clamp(ref ImPlotPoint pOut, ref ImPlotRect self, ImPlotPoint p)
-		{
-			fixed (ImPlotPoint* ppOut = &pOut)
-			{
-				fixed (ImPlotRect* pself = &self)
-				{
-					ClampNative((ImPlotPoint*)ppOut, (ImPlotRect*)pself, p);
-				}
-			}
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal static void ClampNative(ImPlotPoint* pOut, ImPlotRect* self, double x, double y)
+		internal static ImPlotPoint ClampNative(ImPlotRect* self, double x, double y)
 		{
 			#if NET5_0_OR_GREATER
-			((delegate* unmanaged[Cdecl]<ImPlotPoint*, ImPlotRect*, double, double, void>)funcTable[17])(pOut, self, x, y);
+			return ((delegate* unmanaged[Cdecl]<ImPlotRect*, double, double, ImPlotPoint>)funcTable[17])(self, x, y);
 			#else
-			((delegate* unmanaged[Cdecl]<nint, nint, double, double, void>)funcTable[17])((nint)pOut, (nint)self, x, y);
+			return (ImPlotPoint)((delegate* unmanaged[Cdecl]<nint, double, double, ImPlotPoint>)funcTable[17])((nint)self, x, y);
 			#endif
 		}
 
@@ -616,28 +524,8 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static ImPlotPoint Clamp(ImPlotRectPtr self, double x, double y)
 		{
-			ImPlotPoint ret;
-			ClampNative(&ret, self, x, y);
+			ImPlotPoint ret = ClampNative(self, x, y);
 			return ret;
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Clamp(ImPlotPointPtr pOut, ImPlotRectPtr self, double x, double y)
-		{
-			ClampNative(pOut, self, x, y);
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Clamp(ref ImPlotPoint pOut, ImPlotRectPtr self, double x, double y)
-		{
-			fixed (ImPlotPoint* ppOut = &pOut)
-			{
-				ClampNative((ImPlotPoint*)ppOut, self, x, y);
-			}
 		}
 
 		/// <summary>
@@ -647,8 +535,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (ImPlotRect* pself = &self)
 			{
-				ImPlotPoint ret;
-				ClampNative(&ret, (ImPlotRect*)pself, x, y);
+				ImPlotPoint ret = ClampNative((ImPlotRect*)pself, x, y);
 				return ret;
 			}
 		}
@@ -656,38 +543,13 @@ namespace Dalamud.Bindings.ImPlot
 		/// <summary>
 		/// To be documented.
 		/// </summary>
-		public static void Clamp(ImPlotPointPtr pOut, ref ImPlotRect self, double x, double y)
-		{
-			fixed (ImPlotRect* pself = &self)
-			{
-				ClampNative(pOut, (ImPlotRect*)pself, x, y);
-			}
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Clamp(ref ImPlotPoint pOut, ref ImPlotRect self, double x, double y)
-		{
-			fixed (ImPlotPoint* ppOut = &pOut)
-			{
-				fixed (ImPlotRect* pself = &self)
-				{
-					ClampNative((ImPlotPoint*)ppOut, (ImPlotRect*)pself, x, y);
-				}
-			}
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal static void MinNative(ImPlotPoint* pOut, ImPlotRect* self)
+		internal static ImPlotPoint MinNative(ImPlotRect* self)
 		{
 			#if NET5_0_OR_GREATER
-			((delegate* unmanaged[Cdecl]<ImPlotPoint*, ImPlotRect*, void>)funcTable[18])(pOut, self);
+			return ((delegate* unmanaged[Cdecl]<ImPlotRect*, ImPlotPoint>)funcTable[18])(self);
 			#else
-			((delegate* unmanaged[Cdecl]<nint, nint, void>)funcTable[18])((nint)pOut, (nint)self);
+			return (ImPlotPoint)((delegate* unmanaged[Cdecl]<nint, ImPlotPoint>)funcTable[18])((nint)self);
 			#endif
 		}
 
@@ -696,28 +558,8 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static ImPlotPoint Min(ImPlotRectPtr self)
 		{
-			ImPlotPoint ret;
-			MinNative(&ret, self);
+			ImPlotPoint ret = MinNative(self);
 			return ret;
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Min(ImPlotPointPtr pOut, ImPlotRectPtr self)
-		{
-			MinNative(pOut, self);
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Min(ref ImPlotPoint pOut, ImPlotRectPtr self)
-		{
-			fixed (ImPlotPoint* ppOut = &pOut)
-			{
-				MinNative((ImPlotPoint*)ppOut, self);
-			}
 		}
 
 		/// <summary>
@@ -727,8 +569,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (ImPlotRect* pself = &self)
 			{
-				ImPlotPoint ret;
-				MinNative(&ret, (ImPlotRect*)pself);
+				ImPlotPoint ret = MinNative((ImPlotRect*)pself);
 				return ret;
 			}
 		}
@@ -736,38 +577,13 @@ namespace Dalamud.Bindings.ImPlot
 		/// <summary>
 		/// To be documented.
 		/// </summary>
-		public static void Min(ImPlotPointPtr pOut, ref ImPlotRect self)
-		{
-			fixed (ImPlotRect* pself = &self)
-			{
-				MinNative(pOut, (ImPlotRect*)pself);
-			}
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Min(ref ImPlotPoint pOut, ref ImPlotRect self)
-		{
-			fixed (ImPlotPoint* ppOut = &pOut)
-			{
-				fixed (ImPlotRect* pself = &self)
-				{
-					MinNative((ImPlotPoint*)ppOut, (ImPlotRect*)pself);
-				}
-			}
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal static void MaxNative(ImPlotPoint* pOut, ImPlotRect* self)
+		internal static ImPlotPoint MaxNative(ImPlotRect* self)
 		{
 			#if NET5_0_OR_GREATER
-			((delegate* unmanaged[Cdecl]<ImPlotPoint*, ImPlotRect*, void>)funcTable[19])(pOut, self);
+			return ((delegate* unmanaged[Cdecl]<ImPlotRect*, ImPlotPoint>)funcTable[19])(self);
 			#else
-			((delegate* unmanaged[Cdecl]<nint, nint, void>)funcTable[19])((nint)pOut, (nint)self);
+			return (ImPlotPoint)((delegate* unmanaged[Cdecl]<nint, ImPlotPoint>)funcTable[19])((nint)self);
 			#endif
 		}
 
@@ -776,28 +592,8 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static ImPlotPoint Max(ImPlotRectPtr self)
 		{
-			ImPlotPoint ret;
-			MaxNative(&ret, self);
+			ImPlotPoint ret = MaxNative(self);
 			return ret;
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Max(ImPlotPointPtr pOut, ImPlotRectPtr self)
-		{
-			MaxNative(pOut, self);
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Max(ref ImPlotPoint pOut, ImPlotRectPtr self)
-		{
-			fixed (ImPlotPoint* ppOut = &pOut)
-			{
-				MaxNative((ImPlotPoint*)ppOut, self);
-			}
 		}
 
 		/// <summary>
@@ -807,34 +603,8 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (ImPlotRect* pself = &self)
 			{
-				ImPlotPoint ret;
-				MaxNative(&ret, (ImPlotRect*)pself);
+				ImPlotPoint ret = MaxNative((ImPlotRect*)pself);
 				return ret;
-			}
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Max(ImPlotPointPtr pOut, ref ImPlotRect self)
-		{
-			fixed (ImPlotRect* pself = &self)
-			{
-				MaxNative(pOut, (ImPlotRect*)pself);
-			}
-		}
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public static void Max(ref ImPlotPoint pOut, ref ImPlotRect self)
-		{
-			fixed (ImPlotPoint* ppOut = &pOut)
-			{
-				fixed (ImPlotRect* pself = &self)
-				{
-					MaxNative((ImPlotPoint*)ppOut, (ImPlotRect*)pself);
-				}
 			}
 		}
 
@@ -994,7 +764,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static void DestroyContext()
 		{
-			DestroyContextNative((ImPlotContext*)(((void*)0)));
+			DestroyContextNative((ImPlotContext*)(default));
 		}
 
 		/// <summary>
@@ -1407,7 +1177,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static bool BeginSubplots(byte* titleId, int rows, int cols, Vector2 size, ImPlotSubplotFlags flags, float* rowRatios)
 		{
-			byte ret = BeginSubplotsNative(titleId, rows, cols, size, flags, rowRatios, (float*)(((void*)0)));
+			byte ret = BeginSubplotsNative(titleId, rows, cols, size, flags, rowRatios, (float*)(default));
 			return ret != 0;
 		}
 
@@ -1416,7 +1186,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static bool BeginSubplots(byte* titleId, int rows, int cols, Vector2 size, ImPlotSubplotFlags flags)
 		{
-			byte ret = BeginSubplotsNative(titleId, rows, cols, size, flags, (float*)(((void*)0)), (float*)(((void*)0)));
+			byte ret = BeginSubplotsNative(titleId, rows, cols, size, flags, (float*)(default), (float*)(default));
 			return ret != 0;
 		}
 
@@ -1425,7 +1195,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static bool BeginSubplots(byte* titleId, int rows, int cols, Vector2 size)
 		{
-			byte ret = BeginSubplotsNative(titleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)(((void*)0)), (float*)(((void*)0)));
+			byte ret = BeginSubplotsNative(titleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)(default), (float*)(default));
 			return ret != 0;
 		}
 
@@ -1434,7 +1204,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static bool BeginSubplots(byte* titleId, int rows, int cols, Vector2 size, float* rowRatios)
 		{
-			byte ret = BeginSubplotsNative(titleId, rows, cols, size, (ImPlotSubplotFlags)(0), rowRatios, (float*)(((void*)0)));
+			byte ret = BeginSubplotsNative(titleId, rows, cols, size, (ImPlotSubplotFlags)(0), rowRatios, (float*)(default));
 			return ret != 0;
 		}
 
@@ -1466,7 +1236,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (byte* ptitleId = &titleId)
 			{
-				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, rowRatios, (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, rowRatios, (float*)(default));
 				return ret != 0;
 			}
 		}
@@ -1478,7 +1248,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (byte* ptitleId = &titleId)
 			{
-				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, (float*)(((void*)0)), (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, (float*)(default), (float*)(default));
 				return ret != 0;
 			}
 		}
@@ -1490,7 +1260,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (byte* ptitleId = &titleId)
 			{
-				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)(((void*)0)), (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)(default), (float*)(default));
 				return ret != 0;
 			}
 		}
@@ -1502,7 +1272,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (byte* ptitleId = &titleId)
 			{
-				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), rowRatios, (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), rowRatios, (float*)(default));
 				return ret != 0;
 			}
 		}
@@ -1538,7 +1308,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (byte* ptitleId = titleId)
 			{
-				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, rowRatios, (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, rowRatios, (float*)(default));
 				return ret != 0;
 			}
 		}
@@ -1550,7 +1320,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (byte* ptitleId = titleId)
 			{
-				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, (float*)(((void*)0)), (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, (float*)(default), (float*)(default));
 				return ret != 0;
 			}
 		}
@@ -1562,7 +1332,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (byte* ptitleId = titleId)
 			{
-				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)(((void*)0)), (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)(default), (float*)(default));
 				return ret != 0;
 			}
 		}
@@ -1574,7 +1344,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (byte* ptitleId = titleId)
 			{
-				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), rowRatios, (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), rowRatios, (float*)(default));
 				return ret != 0;
 			}
 		}
@@ -1643,7 +1413,7 @@ namespace Dalamud.Bindings.ImPlot
 				int pStrOffset0 = Utils.EncodeStringUTF8(titleId, pStr0, pStrSize0);
 				pStr0[pStrOffset0] = 0;
 			}
-			byte ret = BeginSubplotsNative(pStr0, rows, cols, size, flags, rowRatios, (float*)(((void*)0)));
+			byte ret = BeginSubplotsNative(pStr0, rows, cols, size, flags, rowRatios, (float*)(default));
 			if (pStrSize0 >= Utils.MaxStackallocSize)
 			{
 				Utils.Free(pStr0);
@@ -1673,7 +1443,7 @@ namespace Dalamud.Bindings.ImPlot
 				int pStrOffset0 = Utils.EncodeStringUTF8(titleId, pStr0, pStrSize0);
 				pStr0[pStrOffset0] = 0;
 			}
-			byte ret = BeginSubplotsNative(pStr0, rows, cols, size, flags, (float*)(((void*)0)), (float*)(((void*)0)));
+			byte ret = BeginSubplotsNative(pStr0, rows, cols, size, flags, (float*)(default), (float*)(default));
 			if (pStrSize0 >= Utils.MaxStackallocSize)
 			{
 				Utils.Free(pStr0);
@@ -1703,7 +1473,7 @@ namespace Dalamud.Bindings.ImPlot
 				int pStrOffset0 = Utils.EncodeStringUTF8(titleId, pStr0, pStrSize0);
 				pStr0[pStrOffset0] = 0;
 			}
-			byte ret = BeginSubplotsNative(pStr0, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)(((void*)0)), (float*)(((void*)0)));
+			byte ret = BeginSubplotsNative(pStr0, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)(default), (float*)(default));
 			if (pStrSize0 >= Utils.MaxStackallocSize)
 			{
 				Utils.Free(pStr0);
@@ -1733,7 +1503,7 @@ namespace Dalamud.Bindings.ImPlot
 				int pStrOffset0 = Utils.EncodeStringUTF8(titleId, pStr0, pStrSize0);
 				pStr0[pStrOffset0] = 0;
 			}
-			byte ret = BeginSubplotsNative(pStr0, rows, cols, size, (ImPlotSubplotFlags)(0), rowRatios, (float*)(((void*)0)));
+			byte ret = BeginSubplotsNative(pStr0, rows, cols, size, (ImPlotSubplotFlags)(0), rowRatios, (float*)(default));
 			if (pStrSize0 >= Utils.MaxStackallocSize)
 			{
 				Utils.Free(pStr0);
@@ -1790,7 +1560,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (float* prowRatios = &rowRatios)
 			{
-				byte ret = BeginSubplotsNative(titleId, rows, cols, size, flags, (float*)prowRatios, (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative(titleId, rows, cols, size, flags, (float*)prowRatios, (float*)(default));
 				return ret != 0;
 			}
 		}
@@ -1802,7 +1572,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (float* prowRatios = &rowRatios)
 			{
-				byte ret = BeginSubplotsNative(titleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)prowRatios, (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative(titleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)prowRatios, (float*)(default));
 				return ret != 0;
 			}
 		}
@@ -1843,7 +1613,7 @@ namespace Dalamud.Bindings.ImPlot
 			{
 				fixed (float* prowRatios = &rowRatios)
 				{
-					byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, (float*)prowRatios, (float*)(((void*)0)));
+					byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, (float*)prowRatios, (float*)(default));
 					return ret != 0;
 				}
 			}
@@ -1858,7 +1628,7 @@ namespace Dalamud.Bindings.ImPlot
 			{
 				fixed (float* prowRatios = &rowRatios)
 				{
-					byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)prowRatios, (float*)(((void*)0)));
+					byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)prowRatios, (float*)(default));
 					return ret != 0;
 				}
 			}
@@ -1903,7 +1673,7 @@ namespace Dalamud.Bindings.ImPlot
 			{
 				fixed (float* prowRatios = &rowRatios)
 				{
-					byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, (float*)prowRatios, (float*)(((void*)0)));
+					byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, flags, (float*)prowRatios, (float*)(default));
 					return ret != 0;
 				}
 			}
@@ -1918,7 +1688,7 @@ namespace Dalamud.Bindings.ImPlot
 			{
 				fixed (float* prowRatios = &rowRatios)
 				{
-					byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)prowRatios, (float*)(((void*)0)));
+					byte ret = BeginSubplotsNative((byte*)ptitleId, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)prowRatios, (float*)(default));
 					return ret != 0;
 				}
 			}
@@ -1996,7 +1766,7 @@ namespace Dalamud.Bindings.ImPlot
 			}
 			fixed (float* prowRatios = &rowRatios)
 			{
-				byte ret = BeginSubplotsNative(pStr0, rows, cols, size, flags, (float*)prowRatios, (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative(pStr0, rows, cols, size, flags, (float*)prowRatios, (float*)(default));
 				if (pStrSize0 >= Utils.MaxStackallocSize)
 				{
 					Utils.Free(pStr0);
@@ -2029,7 +1799,7 @@ namespace Dalamud.Bindings.ImPlot
 			}
 			fixed (float* prowRatios = &rowRatios)
 			{
-				byte ret = BeginSubplotsNative(pStr0, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)prowRatios, (float*)(((void*)0)));
+				byte ret = BeginSubplotsNative(pStr0, rows, cols, size, (ImPlotSubplotFlags)(0), (float*)prowRatios, (float*)(default));
 				if (pStrSize0 >= Utils.MaxStackallocSize)
 				{
 					Utils.Free(pStr0);
@@ -2450,7 +2220,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static void SetupAxis(ImAxis axis)
 		{
-			SetupAxisNative(axis, (byte*)(((void*)0)), (ImPlotAxisFlags)(0));
+			SetupAxisNative(axis, (byte*)(default), (ImPlotAxisFlags)(0));
 		}
 
 		/// <summary>
@@ -2458,7 +2228,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static void SetupAxis(ImAxis axis, ImPlotAxisFlags flags)
 		{
-			SetupAxisNative(axis, (byte*)(((void*)0)), flags);
+			SetupAxisNative(axis, (byte*)(default), flags);
 		}
 
 		/// <summary>
@@ -2747,7 +2517,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static void SetupAxisFormat(ImAxis axis, ImPlotFormatter formatter)
 		{
-			SetupAxisFormatNative(axis, formatter, (void*)(((void*)0)));
+			SetupAxisFormatNative(axis, formatter, (void*)(default));
 		}
 
 		/// <summary>
@@ -2784,7 +2554,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static void SetupAxisTicks(ImAxis axis, double* values, int nTicks)
 		{
-			SetupAxisTicksNative(axis, values, nTicks, (byte**)(((void*)0)), (byte)(0));
+			SetupAxisTicksNative(axis, values, nTicks, (byte**)(default), (byte)(0));
 		}
 
 		/// <summary>
@@ -2792,7 +2562,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static void SetupAxisTicks(ImAxis axis, double* values, int nTicks, bool keepDefault)
 		{
-			SetupAxisTicksNative(axis, values, nTicks, (byte**)(((void*)0)), keepDefault ? (byte)1 : (byte)0);
+			SetupAxisTicksNative(axis, values, nTicks, (byte**)(default), keepDefault ? (byte)1 : (byte)0);
 		}
 
 		/// <summary>
@@ -2824,7 +2594,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (double* pvalues = &values)
 			{
-				SetupAxisTicksNative(axis, (double*)pvalues, nTicks, (byte**)(((void*)0)), (byte)(0));
+				SetupAxisTicksNative(axis, (double*)pvalues, nTicks, (byte**)(default), (byte)(0));
 			}
 		}
 
@@ -2835,7 +2605,7 @@ namespace Dalamud.Bindings.ImPlot
 		{
 			fixed (double* pvalues = &values)
 			{
-				SetupAxisTicksNative(axis, (double*)pvalues, nTicks, (byte**)(((void*)0)), keepDefault ? (byte)1 : (byte)0);
+				SetupAxisTicksNative(axis, (double*)pvalues, nTicks, (byte**)(default), keepDefault ? (byte)1 : (byte)0);
 			}
 		}
 
@@ -3015,7 +2785,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static void SetupAxisTicks(ImAxis axis, double vMin, double vMax, int nTicks)
 		{
-			SetupAxisTicksNative(axis, vMin, vMax, nTicks, (byte**)(((void*)0)), (byte)(0));
+			SetupAxisTicksNative(axis, vMin, vMax, nTicks, (byte**)(default), (byte)(0));
 		}
 
 		/// <summary>
@@ -3023,7 +2793,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static void SetupAxisTicks(ImAxis axis, double vMin, double vMax, int nTicks, bool keepDefault)
 		{
-			SetupAxisTicksNative(axis, vMin, vMax, nTicks, (byte**)(((void*)0)), keepDefault ? (byte)1 : (byte)0);
+			SetupAxisTicksNative(axis, vMin, vMax, nTicks, (byte**)(default), keepDefault ? (byte)1 : (byte)0);
 		}
 
 		/// <summary>
@@ -3141,7 +2911,7 @@ namespace Dalamud.Bindings.ImPlot
 		/// </summary>
 		public static void SetupAxisScale(ImAxis axis, ImPlotTransform forward, ImPlotTransform inverse)
 		{
-			SetupAxisScaleNative(axis, forward, inverse, (void*)(((void*)0)));
+			SetupAxisScaleNative(axis, forward, inverse, (void*)(default));
 		}
 
 		/// <summary>
@@ -5013,6 +4783,242 @@ namespace Dalamud.Bindings.ImPlot
 			fixed (byte* plabelId = labelId)
 			{
 				PlotLineNative((byte*)plabelId, values, count, xscale, (double)(0), (ImPlotLineFlags)(0), offset, stride);
+			}
+		}
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public static void PlotLine(ReadOnlySpan<byte> labelId, float* values, int count, int offset, int stride)
+		{
+			fixed (byte* plabelId = labelId)
+			{
+				PlotLineNative((byte*)plabelId, values, count, (double)(1), (double)(0), (ImPlotLineFlags)(0), offset, stride);
+			}
+		}
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public static void PlotLine(ReadOnlySpan<byte> labelId, float* values, int count, double xscale, ImPlotLineFlags flags, int offset, int stride)
+		{
+			fixed (byte* plabelId = labelId)
+			{
+				PlotLineNative((byte*)plabelId, values, count, xscale, (double)(0), flags, offset, stride);
+			}
+		}
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public static void PlotLine(ReadOnlySpan<byte> labelId, float* values, int count, ImPlotLineFlags flags, int offset, int stride)
+		{
+			fixed (byte* plabelId = labelId)
+			{
+				PlotLineNative((byte*)plabelId, values, count, (double)(1), (double)(0), flags, offset, stride);
+			}
+		}
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public static void PlotLine(string labelId, float* values, int count, double xscale, double xstart, ImPlotLineFlags flags, int offset, int stride)
+		{
+			byte* pStr0 = null;
+			int pStrSize0 = 0;
+			if (labelId != null)
+			{
+				pStrSize0 = Utils.GetByteCountUTF8(labelId);
+				if (pStrSize0 >= Utils.MaxStackallocSize)
+				{
+					pStr0 = Utils.Alloc<byte>(pStrSize0 + 1);
+				}
+				else
+				{
+					byte* pStrStack0 = stackalloc byte[pStrSize0 + 1];
+					pStr0 = pStrStack0;
+				}
+				int pStrOffset0 = Utils.EncodeStringUTF8(labelId, pStr0, pStrSize0);
+				pStr0[pStrOffset0] = 0;
+			}
+			PlotLineNative(pStr0, values, count, xscale, xstart, flags, offset, stride);
+			if (pStrSize0 >= Utils.MaxStackallocSize)
+			{
+				Utils.Free(pStr0);
+			}
+		}
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public static void PlotLine(string labelId, float* values, int count, double xscale, double xstart, ImPlotLineFlags flags, int offset)
+		{
+			byte* pStr0 = null;
+			int pStrSize0 = 0;
+			if (labelId != null)
+			{
+				pStrSize0 = Utils.GetByteCountUTF8(labelId);
+				if (pStrSize0 >= Utils.MaxStackallocSize)
+				{
+					pStr0 = Utils.Alloc<byte>(pStrSize0 + 1);
+				}
+				else
+				{
+					byte* pStrStack0 = stackalloc byte[pStrSize0 + 1];
+					pStr0 = pStrStack0;
+				}
+				int pStrOffset0 = Utils.EncodeStringUTF8(labelId, pStr0, pStrSize0);
+				pStr0[pStrOffset0] = 0;
+			}
+			PlotLineNative(pStr0, values, count, xscale, xstart, flags, offset, (int)(sizeof(float)));
+			if (pStrSize0 >= Utils.MaxStackallocSize)
+			{
+				Utils.Free(pStr0);
+			}
+		}
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public static void PlotLine(string labelId, float* values, int count, double xscale, double xstart, ImPlotLineFlags flags)
+		{
+			byte* pStr0 = null;
+			int pStrSize0 = 0;
+			if (labelId != null)
+			{
+				pStrSize0 = Utils.GetByteCountUTF8(labelId);
+				if (pStrSize0 >= Utils.MaxStackallocSize)
+				{
+					pStr0 = Utils.Alloc<byte>(pStrSize0 + 1);
+				}
+				else
+				{
+					byte* pStrStack0 = stackalloc byte[pStrSize0 + 1];
+					pStr0 = pStrStack0;
+				}
+				int pStrOffset0 = Utils.EncodeStringUTF8(labelId, pStr0, pStrSize0);
+				pStr0[pStrOffset0] = 0;
+			}
+			PlotLineNative(pStr0, values, count, xscale, xstart, flags, (int)(0), (int)(sizeof(float)));
+			if (pStrSize0 >= Utils.MaxStackallocSize)
+			{
+				Utils.Free(pStr0);
+			}
+		}
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public static void PlotLine(string labelId, float* values, int count, double xscale, double xstart)
+		{
+			byte* pStr0 = null;
+			int pStrSize0 = 0;
+			if (labelId != null)
+			{
+				pStrSize0 = Utils.GetByteCountUTF8(labelId);
+				if (pStrSize0 >= Utils.MaxStackallocSize)
+				{
+					pStr0 = Utils.Alloc<byte>(pStrSize0 + 1);
+				}
+				else
+				{
+					byte* pStrStack0 = stackalloc byte[pStrSize0 + 1];
+					pStr0 = pStrStack0;
+				}
+				int pStrOffset0 = Utils.EncodeStringUTF8(labelId, pStr0, pStrSize0);
+				pStr0[pStrOffset0] = 0;
+			}
+			PlotLineNative(pStr0, values, count, xscale, xstart, (ImPlotLineFlags)(0), (int)(0), (int)(sizeof(float)));
+			if (pStrSize0 >= Utils.MaxStackallocSize)
+			{
+				Utils.Free(pStr0);
+			}
+		}
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public static void PlotLine(string labelId, float* values, int count, double xscale)
+		{
+			byte* pStr0 = null;
+			int pStrSize0 = 0;
+			if (labelId != null)
+			{
+				pStrSize0 = Utils.GetByteCountUTF8(labelId);
+				if (pStrSize0 >= Utils.MaxStackallocSize)
+				{
+					pStr0 = Utils.Alloc<byte>(pStrSize0 + 1);
+				}
+				else
+				{
+					byte* pStrStack0 = stackalloc byte[pStrSize0 + 1];
+					pStr0 = pStrStack0;
+				}
+				int pStrOffset0 = Utils.EncodeStringUTF8(labelId, pStr0, pStrSize0);
+				pStr0[pStrOffset0] = 0;
+			}
+			PlotLineNative(pStr0, values, count, xscale, (double)(0), (ImPlotLineFlags)(0), (int)(0), (int)(sizeof(float)));
+			if (pStrSize0 >= Utils.MaxStackallocSize)
+			{
+				Utils.Free(pStr0);
+			}
+		}
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public static void PlotLine(string labelId, float* values, int count)
+		{
+			byte* pStr0 = null;
+			int pStrSize0 = 0;
+			if (labelId != null)
+			{
+				pStrSize0 = Utils.GetByteCountUTF8(labelId);
+				if (pStrSize0 >= Utils.MaxStackallocSize)
+				{
+					pStr0 = Utils.Alloc<byte>(pStrSize0 + 1);
+				}
+				else
+				{
+					byte* pStrStack0 = stackalloc byte[pStrSize0 + 1];
+					pStr0 = pStrStack0;
+				}
+				int pStrOffset0 = Utils.EncodeStringUTF8(labelId, pStr0, pStrSize0);
+				pStr0[pStrOffset0] = 0;
+			}
+			PlotLineNative(pStr0, values, count, (double)(1), (double)(0), (ImPlotLineFlags)(0), (int)(0), (int)(sizeof(float)));
+			if (pStrSize0 >= Utils.MaxStackallocSize)
+			{
+				Utils.Free(pStr0);
+			}
+		}
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public static void PlotLine(string labelId, float* values, int count, double xscale, ImPlotLineFlags flags)
+		{
+			byte* pStr0 = null;
+			int pStrSize0 = 0;
+			if (labelId != null)
+			{
+				pStrSize0 = Utils.GetByteCountUTF8(labelId);
+				if (pStrSize0 >= Utils.MaxStackallocSize)
+				{
+					pStr0 = Utils.Alloc<byte>(pStrSize0 + 1);
+				}
+				else
+				{
+					byte* pStrStack0 = stackalloc byte[pStrSize0 + 1];
+					pStr0 = pStrStack0;
+				}
+				int pStrOffset0 = Utils.EncodeStringUTF8(labelId, pStr0, pStrSize0);
+				pStr0[pStrOffset0] = 0;
+			}
+			PlotLineNative(pStr0, values, count, xscale, (double)(0), flags, (int)(0), (int)(sizeof(float)));
+			if (pStrSize0 >= Utils.MaxStackallocSize)
+			{
+				Utils.Free(pStr0);
 			}
 		}
 	}
