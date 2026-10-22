@@ -21,9 +21,7 @@ public interface IObjectWithLocalizableName
     /// </summary>
     IReadOnlyDictionary<string, string>? LocaleNames { get; }
 
-    /// <summary>
-    /// Gets the name in the requested locale if available; otherwise, <see cref="EnglishName"/>.
-    /// </summary>
+    /// <summary>Gets the name in the requested locale, or <see cref="EnglishName"/>.</summary>
     /// <param name="localeCode">The locale code. Must be in lowercase(invariant).</param>
     /// <returns>The value.</returns>
     string GetLocalizedName(string localeCode)

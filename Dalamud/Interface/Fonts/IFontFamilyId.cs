@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 
-using Dalamud.Interface.GameFonts;
 using Dalamud.Utility;
 
 using Newtonsoft.Json;
@@ -22,26 +21,22 @@ public interface IFontFamilyId : IObjectWithLocalizableName
     [JsonIgnore]
     IReadOnlyList<IFontId> Fonts { get; }
 
-    /// <summary>
-    /// Finds the index of the font inside <see cref="Fonts"/> that best matches the given parameters.
-    /// </summary>
-    /// <param name="weight">The weight of the font.</param>
-    /// <param name="stretch">The stretch of the font.</param>
-    /// <param name="style">The style of the font.</param>
+    /// <summary>Finds the index of the font inside <see cref="Fonts"/> closest to a style.</summary>
+    /// <param name="style">The style.</param>
     /// <returns>The index of the font. Guaranteed to be a valid index.</returns>
-    int FindBestMatch(int weight, int stretch, int style);
+    int FindBestMatch(FontStyle style);
 
     /// <summary>
     /// Gets the list of Dalamud-provided fonts.
     /// </summary>
     /// <returns>The list of fonts.</returns>
     static List<IFontFamilyId> ListDalamudFonts() =>
-        [
-            new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkMedium),
-            new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkRegular),
-            new DalamudAssetFontAndFamilyId(DalamudAsset.InconsolataRegular),
-            new DalamudAssetFontAndFamilyId(DalamudAsset.FontAwesomeFreeSolid),
-        ];
+    [
+        new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkMedium),
+        new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkRegular),
+        new DalamudAssetFontAndFamilyId(DalamudAsset.InconsolataRegular),
+        new DalamudAssetFontAndFamilyId(DalamudAsset.FontAwesomeFreeSolid),
+    ];
 
     /// <summary>
     /// Gets the list of Game-provided fonts.

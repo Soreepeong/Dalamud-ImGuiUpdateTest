@@ -1,12 +1,8 @@
 using System.Collections.Generic;
 
-using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Storage.Assets;
 
 using Newtonsoft.Json;
-
-using TerraFX.Interop.DirectX;
 
 namespace Dalamud.Interface.Fonts;
 
@@ -19,7 +15,8 @@ public sealed class DalamudAssetFontAndFamilyId : IFontFamilyId, IFontId
     /// Initializes a new instance of the <see cref="DalamudAssetFontAndFamilyId"/> class.
     /// </summary>
     /// <param name="asset">The font asset.</param>
-    public DalamudAssetFontAndFamilyId(DalamudAsset asset)
+    [JsonConstructor]
+    internal DalamudAssetFontAndFamilyId(DalamudAsset asset)
     {
         if (asset.GetPurpose() != DalamudAssetPurpose.Font)
             throw new ArgumentOutOfRangeException(nameof(asset), asset, "The specified asset is not a font asset.");
@@ -50,15 +47,7 @@ public sealed class DalamudAssetFontAndFamilyId : IFontFamilyId, IFontId
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public int Weight => (int)DWRITE_FONT_WEIGHT.DWRITE_FONT_WEIGHT_NORMAL;
-
-    /// <inheritdoc/>
-    [JsonIgnore]
-    public int Stretch => (int)DWRITE_FONT_STRETCH.DWRITE_FONT_STRETCH_NORMAL;
-
-    /// <inheritdoc/>
-    [JsonIgnore]
-    public int Style => (int)DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_NORMAL;
+    public FontStyle Style => FontStyle.Default;
 
     public static bool operator ==(DalamudAssetFontAndFamilyId? left, DalamudAssetFontAndFamilyId? right) =>
         Equals(left, right);
@@ -76,11 +65,7 @@ public sealed class DalamudAssetFontAndFamilyId : IFontFamilyId, IFontId
     public override string ToString() => $"{nameof(DalamudAssetFontAndFamilyId)}:{this.Asset}";
 
     /// <inheritdoc/>
-    public int FindBestMatch(int weight, int stretch, int style) => 0;
-
-    /// <inheritdoc/>
-    public ImFontPtr AddToBuildToolkit(IFontAtlasBuildToolkitPreBuild tk, in SafeFontConfig config) =>
-        tk.AddDalamudAssetFont(this.Asset, config);
+    public int FindBestMatch(FontStyle style) => 0;
 
     private bool Equals(DalamudAssetFontAndFamilyId other) => this.Asset == other.Asset;
 }

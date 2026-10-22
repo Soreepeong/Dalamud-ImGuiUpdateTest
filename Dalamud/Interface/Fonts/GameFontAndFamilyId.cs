@@ -1,12 +1,6 @@
 using System.Collections.Generic;
 
-using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.GameFonts;
-using Dalamud.Interface.ManagedFontAtlas;
-
 using Newtonsoft.Json;
-
-using TerraFX.Interop.DirectX;
 
 namespace Dalamud.Interface.Fonts;
 
@@ -18,8 +12,9 @@ public sealed class GameFontAndFamilyId : IFontId, IFontFamilyId
     /// <summary>
     /// Initializes a new instance of the <see cref="GameFontAndFamilyId"/> class.
     /// </summary>
-    /// <param name="family">The game font family.</param>
-    public GameFontAndFamilyId(GameFontFamily family) => this.GameFontFamily = family;
+    /// <param name="gameFontFamily">The game font family.</param>
+    [JsonConstructor]
+    internal GameFontAndFamilyId(GameFontFamily gameFontFamily) => this.GameFontFamily = gameFontFamily;
 
     /// <summary>
     /// Gets the game font family.
@@ -41,15 +36,7 @@ public sealed class GameFontAndFamilyId : IFontId, IFontFamilyId
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public int Weight => (int)DWRITE_FONT_WEIGHT.DWRITE_FONT_WEIGHT_NORMAL;
-
-    /// <inheritdoc/>
-    [JsonIgnore]
-    public int Stretch => (int)DWRITE_FONT_STRETCH.DWRITE_FONT_STRETCH_NORMAL;
-
-    /// <inheritdoc/>
-    [JsonIgnore]
-    public int Style => (int)DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_NORMAL;
+    public FontStyle Style => FontStyle.Default;
 
     /// <inheritdoc/>
     [JsonIgnore]
@@ -67,14 +54,10 @@ public sealed class GameFontAndFamilyId : IFontId, IFontFamilyId
     public override int GetHashCode() => (int)this.GameFontFamily;
 
     /// <inheritdoc/>
-    public int FindBestMatch(int weight, int stretch, int style) => 0;
+    public int FindBestMatch(FontStyle style) => 0;
 
     /// <inheritdoc/>
     public override string ToString() => $"{nameof(GameFontAndFamilyId)}:{this.GameFontFamily}";
-
-    /// <inheritdoc/>
-    public ImFontPtr AddToBuildToolkit(IFontAtlasBuildToolkitPreBuild tk, in SafeFontConfig config) =>
-        tk.AddGameGlyphs(new(this.GameFontFamily, config.SizePx), config.GlyphRanges, config.MergeFont);
 
     private bool Equals(GameFontAndFamilyId other) => this.GameFontFamily == other.GameFontFamily;
 }

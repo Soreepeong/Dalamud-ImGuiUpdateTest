@@ -2,8 +2,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Utility;
 
 using Newtonsoft.Json;
@@ -26,9 +24,11 @@ public sealed class SystemFontId : IFontId
     internal unsafe SystemFontId(SystemFontFamilyId family, ComPtr<IDWriteFont> font)
     {
         this.Family = family;
-        this.Weight = (int)font.Get()->GetWeight();
-        this.Stretch = (int)font.Get()->GetStretch();
-        this.Style = (int)font.Get()->GetStyle();
+        this.Style = new(
+            (int)font.Get()->GetWeight(),
+            font.Get()->GetStyle() != DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_NORMAL,
+            (int)font.Get()->GetStretch());
+        this.IsSymbolFont = font.Get()->IsSymbolFont();
 
         using var fn = default(ComPtr<IDWriteLocalizedStrings>);
         font.Get()->GetFaceNames(fn.GetAddressOf()).ThrowOnError();
@@ -41,12 +41,24 @@ public sealed class SystemFontId : IFontId
             this.EnglishName = this.LocaleNames.Values.First();
     }
 
+    /// <summary>Initializes a new instance of the <see cref="SystemFontId"/> class.</summary>
+    /// <param name="family">The family.</param>
+    /// <param name="style">The style.</param>
+    internal SystemFontId(SystemFontFamilyId family, FontStyle style)
+    {
+        this.Family = family;
+        this.Style = style;
+        this.EnglishName = style.ToString();
+        this.LocaleNames = null;
+    }
+
     [JsonConstructor]
     private SystemFontId(string englishName, IReadOnlyDictionary<string, string> localeNames, IFontFamilyId family)
     {
         this.EnglishName = englishName;
         this.LocaleNames = localeNames;
         this.Family = family;
+        this.Style = default;
     }
 
     /// <inheritdoc/>
@@ -62,16 +74,38 @@ public sealed class SystemFontId : IFontId
     public IFontFamilyId Family { get; init; }
 
     /// <inheritdoc/>
-    [JsonProperty]
-    public int Weight { get; init; } = (int)DWRITE_FONT_WEIGHT.DWRITE_FONT_WEIGHT_NORMAL;
+    [JsonProperty("FaceStyle")]
+    public FontStyle Style
+    {
+        get;
+        init => field = new(value.EffectiveWeight, value.Italicized, value.EffectiveStretch);
+    }
 
-    /// <inheritdoc/>
-    [JsonProperty]
-    public int Stretch { get; init; } = (int)DWRITE_FONT_STRETCH.DWRITE_FONT_STRETCH_NORMAL;
+    /// <summary>Gets a value indicating whether the font has symbols for characters.</summary>
+    /// <remarks>Best-effort basis.</remarks>
+    internal bool IsSymbolFont { get; }
 
-    /// <inheritdoc/>
-    [JsonProperty]
-    public int Style { get; init; } = (int)DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_NORMAL;
+    /// <summary>Sets the weight of <see cref="Style"/>, from specs saved before it.</summary>
+    [JsonProperty("Weight")]
+    private int SavedWeight
+    {
+        init => this.Style = this.Style with { Weight = value };
+    }
+
+    /// <summary>Sets the stretch of <see cref="Style"/>, from specs saved before it.</summary>
+    [JsonProperty("Stretch")]
+    private int SavedStretch
+    {
+        init => this.Style = this.Style with { Stretch = value };
+    }
+
+    /// <summary>Sets whether <see cref="Style"/> is italic, from specs saved before it (DirectWrite's style values).
+    /// </summary>
+    [JsonProperty("Style")]
+    private int SavedStyle
+    {
+        init => this.Style = this.Style with { Italicized = value != 0 };
+    }
 
     public static bool operator ==(SystemFontId? left, SystemFontId? right) => Equals(left, right);
 
@@ -82,18 +116,10 @@ public sealed class SystemFontId : IFontId
         ReferenceEquals(this, obj) || (obj is SystemFontId other && this.Equals(other));
 
     /// <inheritdoc/>
-    public override int GetHashCode() => HashCode.Combine(this.Family, this.Weight, this.Stretch, this.Style);
+    public override int GetHashCode() => HashCode.Combine(this.Family, this.Style);
 
     /// <inheritdoc/>
-    public override string ToString() =>
-        $"{nameof(SystemFontId)}:{this.Weight}:{this.Stretch}:{this.Style}:{this.Family}";
-
-    /// <inheritdoc/>
-    public ImFontPtr AddToBuildToolkit(IFontAtlasBuildToolkitPreBuild tk, in SafeFontConfig config)
-    {
-        var (path, index) = this.GetFileAndIndex();
-        return tk.AddFontFromFile(path, config with { FontNo = index });
-    }
+    public override string ToString() => $"{nameof(SystemFontId)}:{this.Style}:{this.Family}";
 
     /// <summary>
     /// Gets the file containing this font, and the font index within.
@@ -125,9 +151,11 @@ public sealed class SystemFontId : IFontId
 
         using var font = default(ComPtr<IDWriteFont>);
         family.Get()->GetFirstMatchingFont(
-            (DWRITE_FONT_WEIGHT)this.Weight,
-            (DWRITE_FONT_STRETCH)this.Stretch,
-            (DWRITE_FONT_STYLE)this.Style,
+            (DWRITE_FONT_WEIGHT)this.Style.Weight,
+            (DWRITE_FONT_STRETCH)this.Style.Stretch,
+            this.Style.Italicized
+                ? DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_ITALIC
+                : DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_NORMAL,
             font.GetAddressOf()).ThrowOnError();
 
         using var fface = default(ComPtr<IDWriteFontFace>);
@@ -157,6 +185,5 @@ public sealed class SystemFontId : IFontId
         return (new(path, 0, (int)pathSize), (int)fface.Get()->GetIndex());
     }
 
-    private bool Equals(SystemFontId other) => this.Family.Equals(other.Family) && this.Weight == other.Weight &&
-                                               this.Stretch == other.Stretch && this.Style == other.Style;
+    private bool Equals(SystemFontId other) => this.Family.Equals(other.Family) && this.Style == other.Style;
 }

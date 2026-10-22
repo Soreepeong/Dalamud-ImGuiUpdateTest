@@ -16,9 +16,6 @@ namespace Dalamud.Interface.Fonts;
 /// </summary>
 public sealed class SystemFontFamilyId : IFontFamilyId
 {
-    [JsonIgnore]
-    private IReadOnlyList<IFontId>? fontsLazy;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="SystemFontFamilyId"/> class.
     /// </summary>
@@ -29,6 +26,15 @@ public sealed class SystemFontFamilyId : IFontFamilyId
     {
         this.EnglishName = englishName;
         this.LocaleNames = localeNames;
+    }
+
+    /// <summary>Initializes a new instance of the <see cref="SystemFontFamilyId"/> class.</summary>
+    /// <remarks>The family is looked up when a font of it loads.</remarks>
+    /// <param name="name">The family name, in any language the font has it in.</param>
+    internal SystemFontFamilyId(string name)
+    {
+        this.EnglishName = name;
+        this.LocaleNames = null;
     }
 
     /// <summary>
@@ -56,32 +62,30 @@ public sealed class SystemFontFamilyId : IFontFamilyId
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public IReadOnlyList<IFontId> Fonts => this.fontsLazy ??= this.GetFonts();
+    [field: JsonIgnore]
+    public IReadOnlyList<IFontId> Fonts => field ??= this.GetFonts();
 
     public static bool operator ==(SystemFontFamilyId? left, SystemFontFamilyId? right) => Equals(left, right);
 
     public static bool operator !=(SystemFontFamilyId? left, SystemFontFamilyId? right) => !Equals(left, right);
 
     /// <inheritdoc/>
-    public int FindBestMatch(int weight, int stretch, int style)
+    public int FindBestMatch(FontStyle style)
     {
-        using var matchingFont = default(ComPtr<IDWriteFont>);
-
+        var (weight, stretch, italic) = (style.EffectiveWeight, style.EffectiveStretch, style.Italicized);
         var candidates = this.Fonts.ToList();
         var minGap = int.MaxValue;
         foreach (var c in candidates)
-            minGap = Math.Min(minGap, Math.Abs(c.Weight - weight));
-        candidates.RemoveAll(c => Math.Abs(c.Weight - weight) != minGap);
+            minGap = Math.Min(minGap, Math.Abs(c.Style.EffectiveWeight - weight));
+        candidates.RemoveAll(c => Math.Abs(c.Style.EffectiveWeight - weight) != minGap);
 
         minGap = int.MaxValue;
         foreach (var c in candidates)
-            minGap = Math.Min(minGap, Math.Abs(c.Stretch - stretch));
-        candidates.RemoveAll(c => Math.Abs(c.Stretch - stretch) != minGap);
+            minGap = Math.Min(minGap, Math.Abs(c.Style.EffectiveStretch - stretch));
+        candidates.RemoveAll(c => Math.Abs(c.Style.EffectiveStretch - stretch) != minGap);
 
-        if (candidates.Any(x => x.Style == style))
-            candidates.RemoveAll(x => x.Style != style);
-        else if (candidates.Any(x => x.Style == (int)DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_NORMAL))
-            candidates.RemoveAll(x => x.Style != (int)DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_NORMAL);
+        if (candidates.Any(x => x.Style.Italicized == italic))
+            candidates.RemoveAll(x => x.Style.Italicized != italic);
 
         if (candidates.Count == 0)
             return 0;
@@ -161,19 +165,18 @@ public sealed class SystemFontFamilyId : IFontFamilyId
             fonts.Add(new SystemFontId(this, font));
         }
 
-        fonts.Sort(
-            (a, b) =>
-            {
-                var comp = a.Weight.CompareTo(b.Weight);
-                if (comp != 0)
-                    return comp;
+        fonts.Sort((a, b) =>
+        {
+            var comp = a.Style.Weight.CompareTo(b.Style.Weight);
+            if (comp != 0)
+                return comp;
 
-                comp = a.Stretch.CompareTo(b.Stretch);
-                if (comp != 0)
-                    return comp;
+            comp = a.Style.Stretch.CompareTo(b.Style.Stretch);
+            if (comp != 0)
+                return comp;
 
-                return a.Style.CompareTo(b.Style);
-            });
+            return a.Style.Italicized.CompareTo(b.Style.Italicized);
+        });
         return fonts;
     }
 

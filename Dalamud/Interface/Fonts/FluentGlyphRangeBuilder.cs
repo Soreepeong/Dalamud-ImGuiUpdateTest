@@ -7,8 +7,6 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Unicode;
 
-using Dalamud.Interface.ManagedFontAtlas.Internals;
-
 namespace Dalamud.Interface.Fonts;
 
 /// <summary>A fluent ImGui glyph range builder.</summary>
@@ -18,7 +16,13 @@ namespace Dalamud.Interface.Fonts;
     Justification = "No")]
 public struct FluentGlyphRangeBuilder
 {
-    private const int ImUnicodeCodepointMax = char.MaxValue;
+    private const int ImUnicodeCodepointMax = 0x10FFFF;
+
+    /// <summary>Characters to draw for missing glyphs, in order of preference.</summary>
+    private const string FallbackCodepoints = "\u3013\uFFFD?-";
+
+    /// <summary>Characters to draw as an ellipsis, in order of preference.</summary>
+    private const string EllipsisCodepoints = "…\u0085";
 
     private BitArray? characters;
 
@@ -42,7 +46,7 @@ public struct FluentGlyphRangeBuilder
     /// <inheritdoc cref="With(char)"/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public FluentGlyphRangeBuilder With(uint codepoint) =>
-        codepoint <= char.MaxValue ? this.With((int)codepoint) : this;
+        codepoint <= ImUnicodeCodepointMax ? this.With((int)codepoint) : this;
 
     /// <inheritdoc cref="With(char)"/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -150,7 +154,7 @@ public struct FluentGlyphRangeBuilder
         while (!utf8Sequence.IsEmpty)
         {
             if (Rune.DecodeFromUtf8(utf8Sequence, out var rune, out var len) == OperationStatus.Done
-                && rune.Value < ImUnicodeCodepointMax)
+                && rune.Value <= ImUnicodeCodepointMax)
                 bits.Set(rune.Value, true);
             utf8Sequence = utf8Sequence[len..];
         }
@@ -187,7 +191,7 @@ public struct FluentGlyphRangeBuilder
                     case OperationStatus.NeedMoreData:
                     case OperationStatus.DestinationTooSmall:
                     default:
-                        throw new InvalidOperationException($"Unexpected return from {Rune.DecodeFromUtf8}.");
+                        throw new InvalidOperationException($"Unexpected return from {nameof(Rune.DecodeFromUtf8)}.");
                 }
             }
         }
@@ -243,7 +247,6 @@ public struct FluentGlyphRangeBuilder
     public FluentGlyphRangeBuilder WithLanguage(CultureInfo cultureInfo)
     {
         // Call in chunks of three to avoid allocating arrays.
-        // Avoid adding ranges that goes over BMP; that is, ranges that goes over ImUnicodeCodepointMax.
         switch (cultureInfo.TwoLetterISOLanguageName)
         {
             case "ja":
@@ -294,18 +297,18 @@ public struct FluentGlyphRangeBuilder
     /// <param name="addFallbackCodepoints">Whether to add the default fallback codepoints to the range.</param>
     /// <param name="addEllipsisCodepoints">Whether to add the default ellipsis codepoints to the range.</param>
     /// <returns>The built ImGui glyph ranges.</returns>
-    public ushort[] Build(bool addFallbackCodepoints = true, bool addEllipsisCodepoints = true)
+    public uint[] Build(bool addFallbackCodepoints = true, bool addEllipsisCodepoints = true)
     {
         if (addFallbackCodepoints)
-            this.With(FontAtlasFactory.FallbackCodepoints);
+            this.With(FallbackCodepoints);
         if (addEllipsisCodepoints)
-            this.With(FontAtlasFactory.EllipsisCodepoints).With('.');
+            this.With(EllipsisCodepoints).With('.');
         return this.BuildExact();
     }
 
     /// <summary>Builds the accumulated data into an ImGui glyph range, exactly as specified.</summary>
     /// <returns>The built ImGui glyph ranges.</returns>
-    public ushort[] BuildExact()
+    public uint[] BuildExact()
     {
         if (this.characters is null)
             return [0];
@@ -336,12 +339,14 @@ public struct FluentGlyphRangeBuilder
             numRanges++;
 
         // Allocate the array and build the range.
-        var res = GC.AllocateUninitializedArray<ushort>((numRanges * 2) + 1);
+        var res = GC.AllocateUninitializedArray<uint>((numRanges * 2) + 1);
         var resp = 0;
         for (var i = 1; i <= ImUnicodeCodepointMax; i++)
         {
-            if (bits.Get(i) == ((resp & 1) == 0))
-                res[resp++] = unchecked((ushort)i);
+            // A range starts at a set bit and ends (inclusive) before the next clear one.
+            var inRange = (resp & 1) == 1;
+            if (bits.Get(i) != inRange)
+                res[resp++] = inRange ? (uint)(i - 1) : (uint)i;
         }
 
         // Handle the final range that terminates on the ending boundary.
