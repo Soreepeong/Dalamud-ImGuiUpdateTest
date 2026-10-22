@@ -3,6 +3,7 @@
     <PropertyGroup>
         <TargetFramework>net10.0-windows</TargetFramework>
         <IsPackable>false</IsPackable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup>
@@ -23,6 +24,10 @@
       <None Update="Utility\Unicode\GraphemeBreakTest.txt">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\bin\$(Configuration)\cimgui.dll" Condition="Exists('..\bin\$(Configuration)\cimgui.dll')" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     </ItemGroup>
 
 </Project>

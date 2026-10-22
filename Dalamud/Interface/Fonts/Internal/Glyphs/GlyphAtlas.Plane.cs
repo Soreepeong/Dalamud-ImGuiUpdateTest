@@ -220,6 +220,48 @@ internal sealed unsafe partial class GlyphAtlas
             return this.view.Get();
         }
 
+        /// <summary>Reads a slot back from the GPU, for tests and debugging.</summary>
+        /// <param name="slot">The slot.</param>
+        /// <returns>Its texels, row by row.</returns>
+        /// <exception cref="InvalidOperationException">If it has not been flushed yet.</exception>
+        public byte[] Read(int slot)
+        {
+            if (this.device.IsEmpty())
+                throw new InvalidOperationException("The plane has not been flushed to a device yet.");
+
+            using var context = this.FlushNow();
+            var desc = new D3D11_TEXTURE2D_DESC
+            {
+                Width = SliceSize,
+                Height = SliceSize,
+                MipLevels = 1,
+                ArraySize = 1,
+                Format = this.Format,
+                SampleDesc = new(1, 0),
+                Usage = D3D11_USAGE.D3D11_USAGE_STAGING,
+                CPUAccessFlags = (uint)D3D11_CPU_ACCESS_FLAG.D3D11_CPU_ACCESS_READ,
+            };
+            using var staging = default(ComPtr<ID3D11Texture2D>);
+            this.device.Get()->CreateTexture2D(&desc, null, staging.GetAddressOf()).ThrowOnError();
+            context.Get()->CopySubresourceRegion(
+                (ID3D11Resource*)staging.Get(), 0, 0, 0, 0, (ID3D11Resource*)this.texture.Get(), (uint)slot, null);
+
+            var mapped = default(D3D11_MAPPED_SUBRESOURCE);
+            context.Get()->Map((ID3D11Resource*)staging.Get(), 0, D3D11_MAP.D3D11_MAP_READ, 0, &mapped).ThrowOnError();
+            try
+            {
+                var rowBytes = SliceSize * this.BytesPerTexel;
+                var result = new byte[rowBytes * SliceSize];
+                for (var y = 0; y < SliceSize; y++)
+                    new ReadOnlySpan<byte>((byte*)mapped.pData + (y * mapped.RowPitch), rowBytes).CopyTo(result.AsSpan(y * rowBytes));
+                return result;
+            }
+            finally
+            {
+                context.Get()->Unmap((ID3D11Resource*)staging.Get(), 0);
+            }
+        }
+
         /// <summary>Tests whether a slot holds glyphs in use of a generation.</summary>
         /// <param name="slot">The slot.</param>
         /// <param name="generation">The generation.</param>
