@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Configuration.Internal;
 using Dalamud.Interface.Components;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Interface.ImGuiNotification.Internal;
 using Dalamud.Interface.Textures;
@@ -403,7 +404,7 @@ internal class TexWidget : IDataWindowWidget
 
         const int numIcons = 1;
         float iconWidths;
-        using (im.IconFontHandle?.Push())
+        using (FontSpec.Icon.Push())
         {
             iconWidths = ImGui.CalcTextSize(FontAwesomeIcon.Save.ToIconString()).X;
         }
@@ -559,7 +560,7 @@ internal class TexWidget : IDataWindowWidget
 
         const int numIcons = 4;
         float iconWidths;
-        using (im.IconFontHandle?.Push())
+        using (FontSpec.Icon.Push())
         {
             iconWidths = ImGui.CalcTextSize(FontAwesomeIcon.Save.ToIconString()).X;
             iconWidths += ImGui.CalcTextSize(FontAwesomeIcon.Sync.ToIconString()).X;

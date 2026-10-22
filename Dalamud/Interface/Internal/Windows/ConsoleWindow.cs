@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -13,7 +14,7 @@ using Dalamud.Game;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Components;
-using Dalamud.Interface.Fonts.Internal;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Interface.ImGuiNotification.Internal;
 using Dalamud.Interface.Utility;
@@ -79,6 +80,8 @@ internal class ConsoleWindow : Window, IDisposable
     private int completionTabIdx = 0;
 
     private IActiveNotification? prevCopyNotification;
+
+    private ImTextStyleRange[] ranges = [];
 
     /// <summary>Initializes a new instance of the <see cref="ConsoleWindow"/> class.</summary>
     /// <param name="configuration">An instance of <see cref="DalamudConfiguration"/>.</param>
@@ -226,7 +229,7 @@ internal class ConsoleWindow : Window, IDisposable
                 }
 
                 ImGui.Selectable(
-                    "###console_null"u8,
+                    $"###console_null{i}",
                     true,
                     ImGuiSelectableFlags.AllowOverlap | ImGuiSelectableFlags.SpanAllColumns);
 
@@ -251,11 +254,7 @@ internal class ConsoleWindow : Window, IDisposable
                 line.HighlightMatches ??= (this.compiledLogHighlight ?? this.compiledLogFilter)?.Matches(line.Line);
                 if (line.HighlightMatches is { } matches)
                 {
-                    this.DrawHighlighted(
-                        line.Line,
-                        matches,
-                        ImGui.GetColorU32(ImGuiCol.Text),
-                        ImGui.GetColorU32(ImGuiColors.HealerGreen));
+                    this.DrawHighlighted(line.Line, matches, ImGui.GetColorU32(ImGuiColors.HealerGreen));
                 }
                 else
                 {
@@ -1088,32 +1087,24 @@ internal class ConsoleWindow : Window, IDisposable
         this.filteredLogEntries.Size = limit;
     }
 
-    private unsafe void DrawHighlighted(
-        ReadOnlySpan<char> line,
-        MatchCollection matches,
-        uint col,
-        uint highlightCol)
+    private void DrawHighlighted(ReadOnlySpan<char> line, MatchCollection matches, uint highlightCol)
     {
-        if (ManagedFont.FromNative(ImGui.GetFont().Handle) is not { } font)
-            return;
+        if (this.ranges.Length < matches.Count)
+        {
+            ArrayPool<ImTextStyleRange>.Shared.Return(this.ranges);
+            this.ranges = ArrayPool<ImTextStyleRange>.Shared.Rent(matches.Count);
+        }
 
-        // One layout with a colored run per match.
-        var highlight = new ImTextStyle { Color = highlightCol };
-        var runs = new TextRun[matches.Count];
-        var runCount = 0;
+        var highlight = ImGui.TextStyle with { Color = highlightCol };
+        var count = 0;
         for (var j = 0; j < matches.Count; j++)
         {
             var g = matches[j].Groups[0];
-            if (g.Length == 0)
-                continue;
-            runs[runCount++] = new(g.Index * sizeof(char), (g.Index + g.Length) * sizeof(char), Style: highlight);
+            if (g.Length != 0)
+                this.ranges[count++] = new(g.Index, g.Length, highlight);
         }
 
-        ImTextDesc desc;
-        ImGuiPNative.GetTextDesc(&desc, 0, ImTextLayoutFlags.None);
-        var layout = TextLayouter.Create(font, new(desc.Size, desc.Density), default(ImTextStyle), line, runs.AsSpan(0, runCount));
-        layout.Render(ImGui.GetWindowDrawList(), ImGui.GetCursorScreenPos(), col);
-        ImGui.Dummy(layout.Size);
+        ImGui.TextStyledRanges(line, this.ranges.AsSpan(0, count));
     }
 
     private record LogEntry

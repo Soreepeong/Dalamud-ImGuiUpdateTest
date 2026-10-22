@@ -10,6 +10,7 @@ using Dalamud.Game.Player;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Components;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.Internal.DesignSystem;
 using Dalamud.Interface.Style;
 using Dalamud.Interface.Utility;
@@ -567,7 +568,7 @@ public class StyleEditorWindow : Window
                         characterDisplay = entry.ContentId.ToString();
 
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (ImGui.GetFrameHeight() / 2f) - (ImGui.GetTextLineHeight() / 2f));
-                    ImGuiHelpers.CompileSeStringWrapped(characterDisplay);
+                    ImGui.MacroString(characterDisplay, wrap: true);
 
                     ImGui.TableSetColumnIndex(2);
                     var currentStyleIdx = string.IsNullOrEmpty(entry.StyleName) || !styleNames.Contains(entry.StyleName)

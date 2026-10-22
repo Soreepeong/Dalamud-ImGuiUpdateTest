@@ -5,9 +5,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Configuration.Internal;
 using Dalamud.Game.Gui;
-using Dalamud.Interface.GameFonts;
-using Dalamud.Interface.ManagedFontAtlas;
-using Dalamud.Interface.ManagedFontAtlas.Internals;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.Utility;
 using Dalamud.IoC;
 using Dalamud.IoC.Internal;
@@ -32,27 +30,19 @@ internal class NotificationManager : INotificationManager, IInternalDisposableSe
     private NotificationPositionChooser? positionChooser;
 
     [ServiceManager.ServiceConstructor]
-    private NotificationManager(FontAtlasFactory fontAtlasFactory)
+    private NotificationManager()
     {
-        this.PrivateAtlas = fontAtlasFactory.CreateFontAtlas(
-            nameof(NotificationManager),
-            FontAtlasAutoRebuildMode.Async);
-        this.IconAxisFontHandle =
-            this.PrivateAtlas.NewGameFontHandle(new(GameFontFamily.Axis, NotificationConstants.IconSize));
-        this.IconFontAwesomeFontHandle =
-            this.PrivateAtlas.NewDelegateFontHandle(
-                e => e.OnPreBuild(
-                    tk => tk.AddFontAwesomeIconFont(new() { SizePx = NotificationConstants.IconSize })));
     }
 
-    /// <summary>Gets the handle to AXIS fonts, sized for use as an icon.</summary>
-    public IFontHandle IconAxisFontHandle { get; }
+    /// <summary>Gets the AXIS font, sized for use as an icon.</summary>
+    public static IFontSpec IconAxisFont { get; } = new SingleFontSpec
+    {
+        FontId = new GameFontAndFamilyId(GameFontFamily.Axis),
+        SizePx = NotificationConstants.IconSize,
+    };
 
-    /// <summary>Gets the handle to FontAwesome fonts, sized for use as an icon.</summary>
-    public IFontHandle IconFontAwesomeFontHandle { get; }
-
-    /// <summary>Gets the private atlas for use with notification windows.</summary>
-    private IFontAtlas PrivateAtlas { get; }
+    /// <summary>Gets the FontAwesome font, sized for use as an icon.</summary>
+    public static IFontSpec IconFontAwesomeFont { get; } = FontSpec.Icon.WithSize(NotificationConstants.IconSize);
 
     /// <summary>
     /// Calculate the width to be used to draw notifications.
@@ -99,7 +89,6 @@ internal class NotificationManager : INotificationManager, IInternalDisposableSe
     /// <inheritdoc/>
     public void DisposeService()
     {
-        this.PrivateAtlas.Dispose();
         foreach (var n in this.pendingNotifications)
             n.DisposeInternal();
         foreach (var n in this.notifications)

@@ -14,8 +14,8 @@ using Dalamud.Configuration.Internal;
 using Dalamud.Game.Text;
 using Dalamud.Hooking.WndProcHook;
 using Dalamud.Interface.Colors;
-using Dalamud.Interface.GameFonts;
-using Dalamud.Interface.ManagedFontAtlas.Internals;
+using Dalamud.Interface.Fonts;
+using Dalamud.Interface.Fonts.Internal;
 using Dalamud.Interface.Utility;
 
 #if IMEDEBUG
@@ -186,9 +186,9 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
             {
                 if (HanRange.Any(x => x.FirstCodePoint <= chr && chr < x.FirstCodePoint + x.Length))
                 {
-                    if (Service<FontAtlasFactory>.Get()
-                                                 ?.GetFdtReader(GameFontFamilyAndSize.Axis12)
-                                                 .FindGlyph(chr) is null)
+                    if (Service<FontFactory>.Get()
+                                            ?.GetFdtView(GameFontFamilyAndSize.Axis12)
+                                            .TryGetGlyph(chr, out _) is not true)
                     {
                         this.EncounteredHan = true;
                         Service<InterfaceManager>.Get().RebuildFonts();

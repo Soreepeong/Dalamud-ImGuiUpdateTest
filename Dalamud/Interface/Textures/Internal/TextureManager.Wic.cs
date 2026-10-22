@@ -354,6 +354,10 @@ internal sealed partial class TextureManager
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>Gets a new reference to the WIC factory.</summary>
+        /// <returns>The reference.</returns>
+        public unsafe ComPtr<IWICImagingFactory> CreateFactoryReference() => new(this.wicFactory.Get());
+
         /// <summary>Creates a new instance of <see cref="IStream"/> from a <see cref="MemoryHandle"/>.</summary>
         /// <param name="handle">An instance of <see cref="MemoryHandle"/>.</param>
         /// <param name="length">The number of bytes in the memory.</param>

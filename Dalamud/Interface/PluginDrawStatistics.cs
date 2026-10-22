@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Linq;
 
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Fonts.Internal.Layout;
 
 namespace Dalamud.Interface;
 
@@ -15,7 +16,7 @@ internal sealed class PluginDrawStatistics
     private readonly Queue<long> drawTimeHistory = [];
 
     private int styleStack;
-    private int textStyleStack;
+    private int textCallbackStack;
     private int colorStack;
     private int fontStack;
     private short disabledStack;
@@ -56,7 +57,7 @@ internal sealed class PluginDrawStatistics
         this.stopwatch.Restart();
         var context = ImGui.GetCurrentContext();
         this.styleStack = context.StyleVarStack.Size;
-        this.textStyleStack = ImGui.GetTextStyleStackSize();
+        this.textCallbackStack = TextCallbackStack.Count;
         this.colorStack = context.ColorStack.Size;
         this.fontStack = context.FontStack.Size;
         this.disabledStack = context.DisabledStackSize;
@@ -76,8 +77,8 @@ internal sealed class PluginDrawStatistics
         var context = ImGui.GetCurrentContext();
         if (this.styleStack < context.StyleVarStack.Size)
             this.LeakedStyles += context.StyleVarStack.Size - this.styleStack;
-        if (this.textStyleStack < ImGui.GetTextStyleStackSize())
-            this.LeakedStyles += ImGui.GetTextStyleStackSize() - this.textStyleStack;
+        if (this.textCallbackStack < TextCallbackStack.Count)
+            this.LeakedStyles += TextCallbackStack.Count - this.textCallbackStack;
         if (this.colorStack < context.ColorStack.Size)
             this.LeakedColors += context.ColorStack.Size - this.colorStack;
         if (this.fontStack < context.FontStack.Size)

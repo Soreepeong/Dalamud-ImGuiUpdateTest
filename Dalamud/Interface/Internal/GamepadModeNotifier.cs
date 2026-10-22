@@ -4,10 +4,7 @@ using CheapLoc;
 
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Interface.ImGuiSeStringRenderer;
-using Dalamud.Interface.ImGuiSeStringRenderer.Internal;
-using Dalamud.Interface.ManagedFontAtlas;
-using Dalamud.Interface.ManagedFontAtlas.Internals;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.Utility;
 using Dalamud.Utility;
 
@@ -33,23 +30,12 @@ internal class GamepadModeNotifier : IDisposable
 
     private static readonly Vector4 GlowColor = new(0.35f, 0.75f, 1f, 1f);
 
-    private readonly DisposeSafety.ScopedFinalizer scopedFinalizer = new();
-    private readonly IFontHandle titleFont;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="GamepadModeNotifier"/> class.
-    /// </summary>
-    /// <param name="fontAtlasFactory">Font factory.</param>
-    public GamepadModeNotifier(FontAtlasFactory fontAtlasFactory)
-    {
-        var atlas = this.scopedFinalizer.Add(
-            fontAtlasFactory.CreateFontAtlas(nameof(GamepadModeNotifier), FontAtlasAutoRebuildMode.Async));
-        this.titleFont = this.scopedFinalizer.Add(
-            atlas.NewDelegateFontHandle(e => e.OnPreBuild(tk => tk.AddDalamudDefaultFont(TitleFontSizePx))));
-    }
+    private static readonly SingleFontSpec TitleFont = FontSpec.Default.WithSize(TitleFontSizePx);
 
     /// <inheritdoc/>
-    public void Dispose() => this.scopedFinalizer.Dispose();
+    public void Dispose()
+    {
+    }
 
     /// <summary>
     /// Draws a light grey-ish, main-viewport-big filled rect in the background draw list alongside a text indicating gamepad mode.
@@ -66,7 +52,7 @@ internal class GamepadModeNotifier : IDisposable
         var centerX = viewport.WorkPos.X + (viewport.WorkSize.X / 2);
         var y = viewport.WorkPos.Y + (TopMargin * ImGuiHelpers.GlobalScale);
 
-        using (this.titleFont.Push())
+        using (TitleFont.Push())
         {
             var title = Loc.Localize("DalamudGamepadModeNotifierTitle", "Gamepad Mode On");
             var titlePos = new Vector2(centerX - (ImGui.CalcTextSize(title).X / 2), y);
@@ -74,8 +60,6 @@ internal class GamepadModeNotifier : IDisposable
             drawList.AddText(titlePos, TextColor, title);
             y += ImGui.GetTextLineHeightWithSpacing();
         }
-
-        string IconMacro(BitmapFontIcon icon) => $"<icon({(int)icon})>";
 
         var description = string.Format(
             Loc.Localize(
@@ -86,25 +70,26 @@ internal class GamepadModeNotifier : IDisposable
             IconMacro(BitmapFontIcon.ControllerAnalogRightStickIn),
             IconMacro(BitmapFontIcon.ControllerButton2));
 
-        var renderer = Service<SeStringRenderer>.Get();
-        var lineParams = new SeStringDrawParams
+        using (ImGui.PushMacroString())
         {
-            TargetDrawList = drawList,
-            WrapWidth = viewport.WorkSize.X,
-            Font = ImGui.GetFont(),
-            FontSize = ImGui.GetFontSize(),
-            Color = TextColor,
-        };
-
-        foreach (var line in description.Split('\n'))
-        {
-            var size = ImGuiHelpers.CenteredSeString(
-                renderer.CompileAndCache(line).AsSpan(),
-                lineParams with { ScreenOffset = viewport.WorkPos with { Y = y } }).Size;
-            y += size.Y + ImGui.GetStyle().ItemSpacing.Y;
+            foreach (var line in description.Split('\n'))
+            {
+                var size = ImGui.CalcTextSize(line, wrapWidth: viewport.WorkSize.X);
+                drawList.AddText(
+                    ImGui.Font,
+                    ImGui.GetFontSize(),
+                    new(centerX - (size.X / 2), y),
+                    TextColor,
+                    line,
+                    viewport.WorkSize.X);
+                y += size.Y + ImGui.GetStyle().ItemSpacing.Y;
+            }
         }
 
         drawList.PopClipRect();
+        return;
+
+        static string IconMacro(BitmapFontIcon icon) => $"<icon({(int)icon})>";
     }
 
     private static void DrawGlow(ImDrawListPtr drawList, Vector2 pos, string text)

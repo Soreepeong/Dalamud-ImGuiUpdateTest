@@ -10,6 +10,7 @@ using Dalamud.Game.Player;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Components;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Interface.ImGuiNotification.Internal;
 using Dalamud.Interface.Internal.DesignSystem;
@@ -525,7 +526,7 @@ internal class ProfileManagerWidget
                         characterDisplay = entry.ContentId.ToString();
 
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (ImGui.GetFrameHeight() / 2f) - (ImGui.GetTextLineHeight() / 2f));
-                    ImGuiHelpers.CompileSeStringWrapped(characterDisplay);
+                    ImGui.MacroString(characterDisplay, wrap: true);
                 }
 
                 ImGui.EndTable();

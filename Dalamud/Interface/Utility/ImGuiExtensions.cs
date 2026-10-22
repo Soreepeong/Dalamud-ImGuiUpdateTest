@@ -1,6 +1,7 @@
 using System.Numerics;
 
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Fonts;
 
 namespace Dalamud.Interface.Utility;
 
@@ -45,7 +46,7 @@ public static class ImGuiExtensions
         {
             var fineClipRect = new Vector4(clipMin.X, clipMin.Y, clipMax.X, clipMax.Y);
             drawListPtr.AddText(
-                ImGui.GetFont(),
+                ImGui.Font,
                 ImGui.GetFontSize(),
                 pos,
                 ImGui.GetColorU32(ImGuiCol.Text),
@@ -55,7 +56,7 @@ public static class ImGuiExtensions
         }
         else
         {
-            drawListPtr.AddText(ImGui.GetFont(), ImGui.GetFontSize(), pos, ImGui.GetColorU32(ImGuiCol.Text), text);
+            drawListPtr.AddText(ImGui.Font, ImGui.GetFontSize(), pos, ImGui.GetColorU32(ImGuiCol.Text), text);
         }
     }
 }

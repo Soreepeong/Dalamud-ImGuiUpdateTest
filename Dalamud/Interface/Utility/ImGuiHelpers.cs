@@ -1,21 +1,13 @@
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Numerics;
-using System.Reactive.Disposables;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text.Unicode;
 
 using Dalamud.Bindings.ImGui;
 using Dalamud.Configuration.Internal;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Interface.ImGuiBackend.InputHandler;
 using Dalamud.Interface.ImGuiBackend.Renderers;
-using Dalamud.Interface.ImGuiSeStringRenderer;
-using Dalamud.Interface.ImGuiSeStringRenderer.Internal;
-using Dalamud.Interface.ManagedFontAtlas;
-using Dalamud.Interface.ManagedFontAtlas.Internals;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
 
@@ -26,7 +18,7 @@ namespace Dalamud.Interface.Utility;
 /// <summary>
 /// Class containing various helper methods for use with ImGui inside Dalamud.
 /// </summary>
-public static partial class ImGuiHelpers
+public static class ImGuiHelpers
 {
     /// <summary>
     /// Gets the main viewport.
@@ -333,33 +325,6 @@ public static partial class ImGuiHelpers
         textCopy.Recycle();
     }
 
-    /// <summary>Draws a SeString.</summary>
-    /// <param name="sss">SeString to draw.</param>
-    /// <param name="style">Initial rendering style.</param>
-    /// <param name="imGuiId">ImGui ID, if link functionality is desired.</param>
-    /// <param name="buttonFlags">Button flags to use on link interaction.</param>
-    /// <returns>Interaction result of the rendered text.</returns>
-    public static SeStringDrawResult SeStringWrapped(
-        ReadOnlySpan<byte> sss,
-        scoped in SeStringDrawParams style = default,
-        ImGuiId imGuiId = default,
-        ImGuiButtonFlags buttonFlags = ImGuiButtonFlags.MouseButtonLeft) =>
-        Service<SeStringRenderer>.Get().Draw(sss, style, imGuiId, buttonFlags);
-
-    /// <summary>Creates and caches a SeString from a text macro representation, and then draws it.</summary>
-    /// <param name="text">SeString text macro representation.
-    /// Newline characters will be normalized to <see cref="NewLinePayload"/>.</param>
-    /// <param name="style">Initial rendering style.</param>
-    /// <param name="imGuiId">ImGui ID, if link functionality is desired.</param>
-    /// <param name="buttonFlags">Button flags to use on link interaction.</param>
-    /// <returns>Interaction result of the rendered text.</returns>
-    public static SeStringDrawResult CompileSeStringWrapped(
-        string text,
-        scoped in SeStringDrawParams style = default,
-        ImGuiId imGuiId = default,
-        ImGuiButtonFlags buttonFlags = ImGuiButtonFlags.MouseButtonLeft) =>
-        Service<SeStringRenderer>.Get().CompileAndDrawWrapped(text, style, imGuiId, buttonFlags);
-
     /// <summary>
     /// Write unformatted text wrapped.
     /// </summary>
@@ -468,49 +433,6 @@ public static partial class ImGuiHelpers
     }
 
     /// <summary>
-    /// Show a centered SeString.
-    /// </summary>
-    /// <param name="sss">The SeString to show.</param>
-    /// <param name="style">
-    /// The initial draw params to use. If <see cref="SeStringDrawParams.TargetDrawList"/> is set, the text is centered in the box
-    /// starting at <see cref="SeStringDrawParams.ScreenOffset"/>, <see cref="SeStringDrawParams.WrapWidth"/> wide.
-    /// You have to set both.
-    /// </param>
-    /// <returns>Interaction result of the rendered text.</returns>
-    public static SeStringDrawResult CenteredSeString(ReadOnlySpan<byte> sss, scoped in SeStringDrawParams style = default)
-    {
-        var drawParams = style.TargetDrawList is null
-                             ? style with { WrapWidth = style.WrapWidth ?? float.MaxValue }
-                             : style;
-
-        var renderer = Service<SeStringRenderer>.Get();
-        var width = renderer.Draw(
-            sss,
-            drawParams with
-            {
-                TargetDrawList = default(ImDrawListPtr),
-                ScreenOffset = Vector2.Zero,
-                Font = style.Font ?? ImGui.GetFont(),
-                FontSize = style.FontSize ?? ImGui.GetFontSize(),
-            }).Size.X;
-
-        if (style.TargetDrawList is null)
-        {
-            CenterCursorFor(width);
-            return renderer.Draw(sss, drawParams);
-        }
-
-        var offset = style.ScreenOffset ?? throw new ArgumentException(
-                         $"{nameof(style.ScreenOffset)} must be set when specifying a target draw list.",
-                         nameof(style));
-        var boxWidth = style.WrapWidth ?? throw new ArgumentException(
-                           $"{nameof(style.WrapWidth)} must be set when specifying a target draw list.",
-                           nameof(style));
-
-        return renderer.Draw(sss, drawParams with { ScreenOffset = offset with { X = offset.X + ((boxWidth - width) / 2) } });
-    }
-
-    /// <summary>
     /// Center the ImGui cursor for a certain text.
     /// </summary>
     /// <param name="text">The text to center for.</param>
@@ -560,7 +482,8 @@ public static partial class ImGuiHelpers
     /// Use values from <see cref="UnicodeRanges"/>.
     /// </summary>
     /// <param name="ranges">The unicode ranges.</param>
-    /// <returns>The range array that can be used for <see cref="SafeFontConfig.GlyphRanges"/>.</returns>
+    /// <returns>The range array that can be used for <see cref="Fonts.SingleFontSpec.CodepointRanges"/>.
+    /// </returns>
     public static uint[] CreateImGuiRangesFrom(IEnumerable<UnicodeRange> ranges) =>
         ranges
             .Select(x => (First: Math.Max(x.FirstCodePoint, 1), Last: x.FirstCodePoint + x.Length - 1))
@@ -584,15 +507,6 @@ public static partial class ImGuiHelpers
     /// <returns><paramref name="self"/> if it is not default; otherwise, <paramref name="other"/>.</returns>
     public static unsafe ImFontPtr OrElse(this ImFontPtr self, ImFontPtr other) =>
         self.IsNull ? other : self;
-
-    /// <summary>Creates a draw data that will draw the given SeString onto it.</summary>
-    /// <param name="sss">SeString to render.</param>
-    /// <param name="style">Initial rendering style.</param>
-    /// <returns>A new self-contained draw data.</returns>
-    internal static BufferBackedImDrawData CreateDrawData(
-        ReadOnlySpan<byte> sss,
-        scoped in SeStringDrawParams style = default) =>
-        Service<SeStringRenderer>.Get().CreateDrawData(sss, style);
 
     /// <summary>
     /// Sets the text for a text input, during the callback.

@@ -4,9 +4,9 @@ using System.Text;
 
 using Dalamud.Bindings.ImGui;
 using Dalamud.Data;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Interface.ImGuiNotification.Internal;
-using Dalamud.Interface.ImGuiSeStringRenderer.Internal;
 using Dalamud.Interface.Utility.Raii;
 
 using Lumina.Excel.Sheets;
@@ -37,15 +37,16 @@ internal class UiColorWidget : IDataWindowWidget
     public void Draw()
     {
         var colors = Service<DataManager>.GetNullable()?.GetExcelSheet<UIColor>()
-            ?? throw new InvalidOperationException("UIColor sheet not loaded.");
+                     ?? throw new InvalidOperationException("UIColor sheet not loaded.");
 
-        Service<SeStringRenderer>.Get().CompileAndDrawWrapped(
+        ImGui.MacroString(
             "· Color notation is #" +
             "<edgecolor(0xFFEEEE)><color(0xFF0000)>RR<color(stackcolor)><edgecolor(stackcolor)>" +
             "<edgecolor(0xEEFFEE)><color(0x00FF00)>GG<color(stackcolor)><edgecolor(stackcolor)>" +
             "<edgecolor(0xEEEEFF)><color(0x0000FF)>BB<color(stackcolor)><edgecolor(stackcolor)>.<br>" +
             "· Click on a color to copy the color code.<br>" +
-            "· Hover on a color to preview the text with edge, when the next color has been used together.");
+            "· Hover on a color to preview the text with edge, when the next color has been used together.",
+            wrap: true);
 
         using var table = ImRaii.Table("UIColor"u8, 9);
         if (!table.Success)
@@ -179,15 +180,7 @@ internal class UiColorWidget : IDataWindowWidget
         (id + 1).TryFormat(buf[ptr..], out bytesWritten);
         ptr += bytesWritten;
         ptr += Encoding.UTF8.GetBytes(")>", buf[ptr..]);
-        Service<SeStringRenderer>.Get().Draw(
-            buf[..ptr],
-            new()
-            {
-                Edge = true,
-                Color = BinaryPrimitives.ReverseEndianness(sheetColor) | 0xFF000000u,
-                EdgeColor = BinaryPrimitives.ReverseEndianness(sheetColor2) | 0xFF000000u,
-                WrapWidth = float.PositiveInfinity,
-            });
+        DrawPreview(buf[..ptr], sheetColor, sheetColor2);
 
         ptr = 0;
         ptr += Encoding.UTF8.GetBytes("<colortype(", buf[ptr..]);
@@ -197,15 +190,19 @@ internal class UiColorWidget : IDataWindowWidget
         id.TryFormat(buf[ptr..], out bytesWritten);
         ptr += bytesWritten;
         ptr += Encoding.UTF8.GetBytes(")>", buf[ptr..]);
-        Service<SeStringRenderer>.Get().Draw(
-            buf[..ptr],
-            new()
-            {
-                Edge = true,
-                Color = BinaryPrimitives.ReverseEndianness(sheetColor2) | 0xFF000000u,
-                EdgeColor = BinaryPrimitives.ReverseEndianness(sheetColor) | 0xFF000000u,
-                WrapWidth = float.PositiveInfinity,
-            });
+        DrawPreview(buf[..ptr], sheetColor2, sheetColor);
+        return;
+
+        static void DrawPreview(ReadOnlySpan<byte> text, uint color, uint edgeColor) =>
+            ImGui.TextStyled(
+                text,
+                new()
+                {
+                    Color = BinaryPrimitives.ReverseEndianness(color) | 0xFF000000u,
+                    EdgeColor = BinaryPrimitives.ReverseEndianness(edgeColor) | 0xFF000000u,
+                    EdgeWidth = ImFontExtensions.DefaultEdgeWidth,
+                    SeStringMode = ImTextSeStringMode.Source,
+                });
     }
 
     private bool DrawColorColumn(uint sheetColor)

@@ -10,8 +10,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.ClientState;
 using Dalamud.Game.Gui;
 using Dalamud.Interface.Animation.EasingFunctions;
-using Dalamud.Interface.ManagedFontAtlas;
-using Dalamud.Interface.ManagedFontAtlas.Internals;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
@@ -19,8 +18,6 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using Dalamud.Storage.Assets;
 using Dalamud.Utility;
-
-using Lumina.Text.ReadOnly;
 
 using Serilog;
 
@@ -40,8 +37,7 @@ internal class TitleScreenMenuWindow : Window, IDisposable
     private readonly TitleScreenMenu titleScreenMenu;
 
     private readonly DisposeSafety.ScopedFinalizer scopedFinalizer = new();
-    private readonly IFontAtlas privateAtlas;
-    private readonly Lazy<IFontHandle> myFontHandle;
+    private readonly SingleFontSpec font = FontSpec.Default.WithSize(TargetFontSizePx);
     private readonly Lazy<IDalamudTextureWrap> shadeTexture;
 
     private readonly Dictionary<Guid, InOutCubic> shadeEasings = [];
@@ -60,7 +56,6 @@ internal class TitleScreenMenuWindow : Window, IDisposable
     /// <param name="clientState">An instance of <see cref="ClientState"/>.</param>
     /// <param name="configuration">An instance of <see cref="DalamudConfiguration"/>.</param>
     /// <param name="dalamudAssetManager">An instance of <see cref="DalamudAssetManager"/>.</param>
-    /// <param name="fontAtlasFactory">An instance of <see cref="FontAtlasFactory"/>.</param>
     /// <param name="framework">An instance of <see cref="Framework"/>.</param>
     /// <param name="titleScreenMenu">An instance of <see cref="TitleScreenMenu"/>.</param>
     /// <param name="gameGui">An instance of <see cref="GameGui"/>.</param>
@@ -70,7 +65,6 @@ internal class TitleScreenMenuWindow : Window, IDisposable
         ClientState clientState,
         DalamudConfiguration configuration,
         DalamudAssetManager dalamudAssetManager,
-        FontAtlasFactory fontAtlasFactory,
         Framework framework,
         GameGui gameGui,
         TitleScreenMenu titleScreenMenu,
@@ -98,21 +92,7 @@ internal class TitleScreenMenuWindow : Window, IDisposable
         this.RespectCloseHotkey = false;
 
         this.shadeTexture = new(() => dalamudAssetManager.GetDalamudTextureWrap(DalamudAsset.TitleScreenMenuShade));
-        this.privateAtlas = fontAtlasFactory.CreateFontAtlas(this.WindowName, FontAtlasAutoRebuildMode.Async);
-        this.scopedFinalizer.Add(this.privateAtlas);
-
         this.AllowBackgroundBlur = false;
-
-        this.myFontHandle = new(
-            () => this.scopedFinalizer.Add(
-                this.privateAtlas.NewDelegateFontHandle(
-                    e => e.OnPreBuild(
-                        toolkit => toolkit.AddDalamudDefaultFont(
-                            TargetFontSizePx,
-                            titleScreenMenu.Entries.SelectMany(x => x.Name).ToGlyphRange())))));
-
-        titleScreenMenu.EntryListChange += this.TitleScreenMenuEntryListChange;
-        this.scopedFinalizer.Add(() => titleScreenMenu.EntryListChange -= this.TitleScreenMenuEntryListChange);
 
         this.shadeTexture = new(() => dalamudAssetManager.GetDalamudTextureWrap(DalamudAsset.TitleScreenMenuShade));
 
@@ -328,12 +308,14 @@ internal class TitleScreenMenuWindow : Window, IDisposable
                 break;
             }
         }
+
+        ImGui.Dummy(Vector2.Zero);
     }
 
     private bool DrawEntry(
         ITitleScreenMenuEntry entry, bool inhibitFadeout, bool showText, bool isFirst, bool overrideAlpha, bool interactable)
     {
-        using var fontScopeDispose = this.myFontHandle.Value.Push();
+        using var fontScopeDispose = this.font.Push();
 
         var scale = ImGui.GetStyle().FontScaleMain;
 
@@ -427,13 +409,12 @@ internal class TitleScreenMenuWindow : Window, IDisposable
 
         // Drop shadow
         ImGui.SetCursorPos(cursor);
-        ImGuiHelpers.SeStringWrapped(
-            ReadOnlySeString.FromText(entry.Name),
-            new()
+        ImGui.TextStyled(
+            entry.Name,
+            ImGui.TextStyle with
             {
-                FontSize = TargetFontSizePx * ImGui.GetStyle().FontScaleMain,
-                Edge = true,
-                Shadow = true,
+                Edge = new(0xFF000000),
+                Shadow = new(0xFF000000),
             });
 
         if (overrideAlpha)
@@ -443,6 +424,7 @@ internal class TitleScreenMenuWindow : Window, IDisposable
 
         initialCursor.Y += dalamudTextureWrap.Height * scale;
         ImGui.SetCursorPos(initialCursor);
+        ImGui.Dummy(Vector2.Zero);
 
         return isHover;
     }
@@ -460,6 +442,4 @@ internal class TitleScreenMenuWindow : Window, IDisposable
         if (!charaMake.IsNull || !charaSelect.IsNull || !titleDcWorldMap.IsNull)
             this.IsOpen = false;
     }
-
-    private void TitleScreenMenuEntryListChange() => this.privateAtlas.BuildFontsAsync();
 }

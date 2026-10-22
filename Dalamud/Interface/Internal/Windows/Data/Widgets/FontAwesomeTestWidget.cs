@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Components;
-using Dalamud.Interface.ImGuiSeStringRenderer;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.Textures.Internal;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Internal;
@@ -116,8 +116,7 @@ internal class FontAwesomeTestWidget : IDataWindowWidget
                     this.icons[i].ToString(),
                     Task.FromResult(
                         Service<TextureManager>.Get().CreateTextureFromSeString(
-                            ReadOnlySeString.FromText(this.icons[i].ToIconString()),
-                            new SeStringDrawParams { Font = ImGui.GetFont(), FontSize = ImGui.GetFontSize(), ScreenOffset = Vector2.Zero })));
+                            ReadOnlySeString.FromText(this.icons[i].ToIconString()))));
             }
 
             ImGuiHelpers.ScaledDummy(2f);

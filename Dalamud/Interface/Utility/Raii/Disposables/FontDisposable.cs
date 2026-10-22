@@ -1,4 +1,5 @@
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Fonts;
 
 // ReSharper disable once CheckNamespace
 namespace Dalamud.Interface.Utility.Raii;
@@ -37,7 +38,7 @@ public static partial class ImRaii
         private FontDisposable InternalPush(ImFontPtr font)
         {
             if (FontPushCounter++ == 0)
-                DefaultPushed = ImGui.GetFont();
+                DefaultPushed = ImGui.Font;
 
             ImGui.PushFont(font);
             ++this.Count;

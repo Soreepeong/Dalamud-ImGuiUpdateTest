@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
@@ -6,8 +7,8 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Data;
 using Dalamud.Game.Gui;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Interface.ImGuiSeStringRenderer;
-using Dalamud.Interface.ImGuiSeStringRenderer.Internal;
+using Dalamud.Interface.Fonts;
+using Dalamud.Interface.Fonts.Internal.SeStrings;
 using Dalamud.Interface.Textures.Internal;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Internal;
@@ -28,13 +29,25 @@ namespace Dalamud.Interface.Internal.Windows.Data.Widgets;
 /// <summary>
 /// Widget for displaying Addon Data.
 /// </summary>
-internal unsafe class SeStringRendererTestWidget : IDataWindowWidget
+internal unsafe class SeStringRendererTestWidget : IDataWindowWidget, ISeStringCallback
 {
-    private static readonly string[] ThemeNames = ["Dark", "Light", "Classic FF", "Clear Blue", "Clear White", "Clear Green"];
+    private static readonly string[] ThemeNames =
+        ["Dark", "Light", "Classic FF", "Clear Blue", "Clear White", "Clear Green"];
+
     private ImVectorWrapper<byte> testStringBuffer;
     private string testString = string.Empty;
     private ReadOnlySeString? logkind;
-    private SeStringDrawParams style;
+    private ImTextStyle textStyle;
+    private uint linkHoverColor;
+    private uint linkActiveColor;
+    private float opacity;
+    private bool wrap;
+    private uint edgeColor;
+    private uint shadowColor;
+    private bool edge;
+    private bool shadow;
+    private bool forceEdgeColor;
+    private int? themeIndex;
     private bool interactable;
     private bool useEntity;
     private bool alignToFramePadding;
@@ -49,9 +62,39 @@ internal unsafe class SeStringRendererTestWidget : IDataWindowWidget
     public bool Ready { get; set; }
 
     /// <inheritdoc/>
+    int? ISeStringCallback.ThemeIndex => this.themeIndex;
+
+    /// <inheritdoc/>
+    bool? ISeStringCallback.ShouldHandle(ReadOnlySePayloadSpan payload) =>
+        this.forceEdgeColor && payload.MacroCode is MacroCode.EdgeColor or MacroCode.EdgeColorType ? false : null;
+
+    /// <inheritdoc/>
+    bool ISeStringCallback.TryGetEntity(in SeStringEntityContext context, out SeStringEntity entity)
+    {
+        entity = this.GetEntity(context);
+        return entity;
+    }
+
+    /// <inheritdoc/>
+    ImFontPtr ISeStringCallback.GetLinkFont(in SeStringLinkContext link, ImFontPtr font) =>
+        font.WithStyle(font.Style with { BackgroundColor = link.Held ? this.linkActiveColor : this.linkHoverColor });
+
+    /// <inheritdoc/>
     public void Load()
     {
-        this.style = new() { GetEntity = this.GetEntity };
+        this.linkHoverColor = ImGui.GetColorU32(ImGuiCol.ButtonHovered);
+        this.linkActiveColor = ImGui.GetColorU32(ImGuiCol.ButtonActive);
+        this.opacity = 1;
+        this.wrap = true;
+        this.forceEdgeColor = false;
+        this.themeIndex = null;
+        this.textStyle = new()
+        {
+            EdgeWidth = ImFontExtensions.DefaultEdgeWidth,
+            ShadowOffset = ImFontExtensions.DefaultShadowOffset,
+        };
+        this.edgeColor = this.shadowColor = 0xFF000000;
+        this.edge = this.shadow = false;
         this.logkind = null;
         this.testString = string.Empty;
         this.interactable = this.useEntity = true;
@@ -62,93 +105,69 @@ internal unsafe class SeStringRendererTestWidget : IDataWindowWidget
     /// <inheritdoc/>
     public void Draw()
     {
-        var t2 = ImGui.ColorConvertU32ToFloat4(this.style.Color ??= ImGui.GetColorU32(ImGuiCol.Text));
+        var t2 = ImGui.ColorConvertU32ToFloat4(
+            this.textStyle.Color != 0 ? this.textStyle.Color : ImGui.GetColorU32(ImGuiCol.Text));
         if (ImGui.ColorEdit4("Color", ref t2))
-            this.style.Color = ImGui.ColorConvertFloat4ToU32(t2);
+            this.textStyle.Color = ImGui.ColorConvertFloat4ToU32(t2);
 
-        t2 = ImGui.ColorConvertU32ToFloat4(this.style.EdgeColor ??= 0xFF000000u);
+        t2 = ImGui.ColorConvertU32ToFloat4(this.edgeColor);
         if (ImGui.ColorEdit4("Edge Color", ref t2))
-            this.style.EdgeColor = ImGui.ColorConvertFloat4ToU32(t2);
+            this.edgeColor = ImGui.ColorConvertFloat4ToU32(t2);
 
         ImGui.SameLine();
-        var t = this.style.ForceEdgeColor;
-        if (ImGui.Checkbox("Forced"u8, ref t))
-            this.style.ForceEdgeColor = t;
+        if (ImGui.Checkbox("Forced"u8, ref this.forceEdgeColor))
+            SeStringCallbackStack.Invalidate(this);
 
-        t2 = ImGui.ColorConvertU32ToFloat4(this.style.ShadowColor ??= 0xFF000000u);
+        t2 = ImGui.ColorConvertU32ToFloat4(this.shadowColor);
         if (ImGui.ColorEdit4("Shadow Color"u8, ref t2))
-            this.style.ShadowColor = ImGui.ColorConvertFloat4ToU32(t2);
+            this.shadowColor = ImGui.ColorConvertFloat4ToU32(t2);
 
-        t2 = ImGui.ColorConvertU32ToFloat4(this.style.LinkHoverBackColor ??= ImGui.GetColorU32(ImGuiCol.ButtonHovered));
+        t2 = ImGui.ColorConvertU32ToFloat4(this.linkHoverColor);
         if (ImGui.ColorEdit4("Link Hover Color"u8, ref t2))
-            this.style.LinkHoverBackColor = ImGui.ColorConvertFloat4ToU32(t2);
+            this.linkHoverColor = ImGui.ColorConvertFloat4ToU32(t2);
 
-        t2 = ImGui.ColorConvertU32ToFloat4(this.style.LinkActiveBackColor ??= ImGui.GetColorU32(ImGuiCol.ButtonActive));
+        t2 = ImGui.ColorConvertU32ToFloat4(this.linkActiveColor);
         if (ImGui.ColorEdit4("Link Active Color"u8, ref t2))
-            this.style.LinkActiveBackColor = ImGui.ColorConvertFloat4ToU32(t2);
+            this.linkActiveColor = ImGui.ColorConvertFloat4ToU32(t2);
 
-        var t3 = this.style.LineHeight ??= 1f;
-        if (ImGui.DragFloat("Line Height"u8, ref t3, 0.01f, 0.4f, 3f, "%.02f"))
-            this.style.LineHeight = t3;
+        ImGui.DragFloat("Opacity"u8, ref this.opacity, 0.005f, 0f, 1f, "%.02f");
 
-        t3 = this.style.Opacity ??= 1f;
-        if (ImGui.DragFloat("Opacity"u8, ref t3, 0.005f, 0f, 1f, "%.02f"))
-            this.style.Opacity = t3;
+        ImGui.DragFloat("Edge Width (em)"u8, ref this.textStyle.EdgeWidth, 0.001f, 0f, 0.5f, "%.03f");
+        ImGui.DragFloat("Edge Softness"u8, ref this.textStyle.EdgeSoftness, 0.01f, 0f, 2f, "%.02f");
+        ImGui.DragFloat2("Shadow Offset (em)"u8, ref this.textStyle.ShadowOffset, 0.001f, -0.5f, 0.5f, "%.03f");
 
-        t3 = this.style.EdgeStrength ??= 0.25f;
-        if (ImGui.DragFloat("Edge Strength"u8, ref t3, 0.005f, 0f, 1f, "%.02f"))
-            this.style.EdgeStrength = t3;
-
-        t = this.style.Edge;
-        if (ImGui.Checkbox("Edge"u8, ref t))
-            this.style.Edge = t;
+        ImGui.Checkbox("Edge"u8, ref this.edge);
+        ImGui.SameLine();
+        ImGui.Checkbox("Bold"u8, ref this.textStyle.Bold);
+        ImGui.SameLine();
+        ImGui.Checkbox("Italic"u8, ref this.textStyle.Italic);
+        ImGui.SameLine();
+        ImGui.Checkbox("Shadow"u8, ref this.shadow);
+        this.textStyle.EdgeColor = this.edge ? this.edgeColor : 0;
+        this.textStyle.ShadowColor = this.shadow ? this.shadowColor : 0;
 
         ImGui.SameLine();
-        t = this.style.Bold;
-        if (ImGui.Checkbox("Bold"u8, ref t))
-            this.style.Bold = t;
-
-        ImGui.SameLine();
-        t = this.style.Italic;
-        if (ImGui.Checkbox("Italic"u8, ref t))
-            this.style.Italic = t;
-
-        ImGui.SameLine();
-        t = this.style.Shadow;
-        if (ImGui.Checkbox("Shadow"u8, ref t))
-            this.style.Shadow = t;
-
-        ImGui.SameLine();
-        var t4 = this.style.ThemeIndex ?? AtkStage.Instance()->AtkUIColorHolder->ActiveColorThemeType;
+        var t4 = this.themeIndex ?? AtkStage.Instance()->AtkUIColorHolder->ActiveColorThemeType;
         using (ImRaii.ItemWidth(ImGui.CalcTextSize("WWWWWWWWWWWWWW"u8).X))
         {
             if (ImGui.Combo("##theme", ref t4, ThemeNames))
-                this.style.ThemeIndex = t4;
+            {
+                this.themeIndex = t4;
+                SeStringCallbackStack.Invalidate(this);
+            }
         }
 
         ImGui.SameLine();
-        t = this.style.LinkUnderlineThickness > 0f;
-        if (ImGui.Checkbox("Link Underline"u8, ref t))
-            this.style.LinkUnderlineThickness = t ? 1f : 0f;
+        ImGui.Checkbox("Word Wrap"u8, ref this.wrap);
+
+        ImGui.Checkbox("Interactable"u8, ref this.interactable);
 
         ImGui.SameLine();
-        t = this.style.WrapWidth is null;
-        if (ImGui.Checkbox("Word Wrap"u8, ref t))
-            this.style.WrapWidth = t ? null : float.PositiveInfinity;
-
-        t = this.interactable;
-        if (ImGui.Checkbox("Interactable"u8, ref t))
-            this.interactable = t;
+        if (ImGui.Checkbox("Use Entity Replacements"u8, ref this.useEntity))
+            SeStringCallbackStack.Invalidate(this);
 
         ImGui.SameLine();
-        t = this.useEntity;
-        if (ImGui.Checkbox("Use Entity Replacements"u8, ref t))
-            this.useEntity = t;
-
-        ImGui.SameLine();
-        t = this.alignToFramePadding;
-        if (ImGui.Checkbox("Align to Frame Padding"u8, ref t))
-            this.alignToFramePadding = t;
+        ImGui.Checkbox("Align to Frame Padding"u8, ref this.alignToFramePadding);
 
         if (ImGui.CollapsingHeader("LogKind Preview"u8))
         {
@@ -179,13 +198,12 @@ internal unsafe class SeStringRendererTestWidget : IDataWindowWidget
                 this.logkind = tt.ToReadOnlySeString();
             }
 
-            ImGuiHelpers.SeStringWrapped(this.logkind.Value.Data.Span, this.style);
+            this.DrawSeString(this.logkind.Value.Data.Span, ImTextSeStringMode.Compiled);
         }
 
         if (ImGui.CollapsingHeader("Draw into drawlist"))
         {
             ImGuiHelpers.ScaledDummy(100);
-            ImGui.SetCursorScreenPos(ImGui.GetItemRectMin() + ImGui.GetStyle().FramePadding);
             var clipMin = ImGui.GetItemRectMin() + ImGui.GetStyle().FramePadding;
             var clipMax = ImGui.GetItemRectMax() - ImGui.GetStyle().FramePadding;
             clipMin.Y = MathF.Max(clipMin.Y, ImGui.GetWindowPos().Y);
@@ -193,9 +211,12 @@ internal unsafe class SeStringRendererTestWidget : IDataWindowWidget
 
             var dl = ImGui.GetWindowDrawList();
             dl.PushClipRect(clipMin, clipMax);
-            ImGuiHelpers.CompileSeStringWrapped(
-                "<icon(1)>Test test<icon(1)>",
-                new SeStringDrawParams { Color = 0xFFFFFFFF, WrapWidth = float.MaxValue, TargetDrawList = dl });
+            dl.AddText(
+                this.FontFor(ImTextSeStringMode.Source),
+                ImGui.GetFontSize(),
+                clipMin,
+                ImGui.GetColorU32(ImGuiCol.Text),
+                "<icon(1)>Test test<icon(1)>"u8);
             dl.PopClipRect();
         }
 
@@ -207,7 +228,10 @@ internal unsafe class SeStringRendererTestWidget : IDataWindowWidget
                 ImGui.TableSetupScrollFreeze(0, 1);
                 ImGui.TableSetupColumn("Row ID"u8, ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("0000000"u8).X);
                 ImGui.TableSetupColumn("Text"u8, ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableSetupColumn("Misc"u8, ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("AAAAAAAAAAAAAAAAA"u8).X);
+                ImGui.TableSetupColumn(
+                    "Misc"u8,
+                    ImGuiTableColumnFlags.WidthFixed,
+                    ImGui.CalcTextSize("AAAAAAAAAAAAAAAAA"u8).X);
                 ImGui.TableHeadersRow();
 
                 var addon = Service<DataManager>.GetNullable()?.GetExcelSheet<Addon>() ??
@@ -230,7 +254,7 @@ internal unsafe class SeStringRendererTestWidget : IDataWindowWidget
 
                         ImGui.TableNextColumn();
                         ImGui.AlignTextToFramePadding();
-                        ImGuiHelpers.SeStringWrapped(row.Text, this.style);
+                        this.DrawSeString(row.Text.Data.Span, ImTextSeStringMode.Compiled);
 
                         ImGui.TableNextColumn();
                         if (ImGui.Button("Print to Chat"u8))
@@ -255,7 +279,7 @@ internal unsafe class SeStringRendererTestWidget : IDataWindowWidget
 
         if (ImGui.Button("Print to Chat Log"u8))
         {
-            Service<ChatGui>.Get().Print(Service<SeStringRenderer>.Get().CompileAndCache(this.testString));
+            Service<ChatGui>.Get().Print(Service<SeStringLayouter>.Get().CompileAndCache(this.testString));
         }
 
         ImGui.SameLine();
@@ -270,17 +294,12 @@ internal unsafe class SeStringRendererTestWidget : IDataWindowWidget
                         ReadOnlySeString.FromMacroString(
                             this.testString,
                             new(ExceptionMode: MacroStringParseExceptionMode.EmbedError)),
-                        this.style with
-                        {
-                            Font = ImGui.GetFont(),
-                            FontSize = ImGui.GetFontSize(),
-                            WrapWidth = ImGui.GetContentRegionAvail().X,
-                            ThemeIndex = AtkStage.Instance()->AtkUIColorHolder->ActiveColorThemeType,
-                        })));
+                        this.FontFor(ImTextSeStringMode.None),
+                        wrapWidth: ImGui.GetContentRegionAvail().X)));
         }
 
         ImGuiHelpers.ScaledDummy(3);
-        ImGuiHelpers.CompileSeStringWrapped(
+        this.DrawSeString(
             "Optional features implemented for the following test input:<br>" +
             "· <colortype(710)>line breaks<colortype(0)> are automatically replaced to <colortype(710)>\\<br><colortype(0)>.<br>" +
             "· <colortype(710)>D<link(0xCE)>alamud<colortype(0)> will display Dalamud.<br>" +
@@ -297,7 +316,7 @@ internal unsafe class SeStringRendererTestWidget : IDataWindowWidget
             "· <colortype(710)>C<link(0xCE)>hangelogApiBumpIcon<colortype(0)> will display ChangelogApiBumpIcon.<br>" +
             "· <colortype(710)>icon<link(0xCE)>(5)<colortype(0)> will display icon(5). This is different from \\<icon<link(0xCE)>(5)>.<br>" +
             "· <colortype(710)>tex<link(0xCE)>(ui/loadingimage/-nowloading_base25_hr1.tex)<colortype(0)> will display tex(ui/loadingimage/-nowloading_base25_hr1.tex).",
-            this.style);
+            ImTextSeStringMode.Source);
         ImGuiHelpers.ScaledDummy(3);
 
         fixed (byte* labelPtr = "Test Input"u8)
@@ -327,172 +346,178 @@ internal unsafe class SeStringRendererTestWidget : IDataWindowWidget
         if (this.alignToFramePadding)
             ImGui.AlignTextToFramePadding();
 
+        this.DrawSeString(this.testString, ImTextSeStringMode.Source);
         if (this.interactable)
         {
-            if (ImGuiHelpers.CompileSeStringWrapped(this.testString, this.style, new("this is an ImGui id")) is
-                {
-                    InteractedPayload: { } payload, InteractedPayloadOffset: var offset,
-                    InteractedPayloadEnvelope: var envelope,
-                    Clicked: var clicked
-                })
+            ImGui.Separator();
+            if (ImGui.TryGetSeStringInteraction(out var interaction, SeStringInteractionFlags.All))
             {
-                ImGui.Separator();
+                var macro = Encoding.UTF8.GetBytes(this.testString)
+                                    .AsSpan(interaction.PayloadOffset, interaction.PayloadLength);
+                var payload = Game.Text.SeStringHandling.SeString
+                                  .Parse(ReadOnlySeString.FromMacroString(macro).Data.Span).Payloads
+                                  .FirstOrDefault();
                 if (this.alignToFramePadding)
                     ImGui.AlignTextToFramePadding();
-                ImGui.Text($"Hovered[{offset}]: {new ReadOnlySeStringSpan(envelope).ToString()}; {payload}");
-                if (clicked && payload is DalamudLinkPayload { Plugin: "test" } dlp)
+                ImGui.Text(
+                    $"{interaction.Flags}[{interaction.PayloadOffset}]: {Encoding.UTF8.GetString(macro)}; {payload}");
+                if ((interaction.Flags & SeStringInteractionFlags.LeftClick) != 0 &&
+                    payload is DalamudLinkPayload { Plugin: "test" } dlp)
+                {
                     Util.OpenLink(dlp.ExtraString);
+                }
             }
             else
             {
-                ImGui.Separator();
                 if (this.alignToFramePadding)
                     ImGui.AlignTextToFramePadding();
-                ImGuiHelpers.CompileSeStringWrapped("If a link is hovered, it will be displayed here.", this.style);
+                this.DrawSeString("If a link is hovered, it will be displayed here.", ImTextSeStringMode.Source);
             }
-        }
-        else
-        {
-            ImGuiHelpers.CompileSeStringWrapped(this.testString, this.style);
         }
 
         ImGui.Separator();
         if (this.alignToFramePadding)
             ImGui.AlignTextToFramePadding();
-        ImGuiHelpers.CompileSeStringWrapped("Extra line for alignment testing.", this.style);
+        this.DrawSeString("Extra line for alignment testing.", ImTextSeStringMode.Source);
     }
 
-    private SeStringReplacementEntity GetEntity(scoped in SeStringDrawState state, int byteOffset)
+    private ImFontPtr FontFor(ImTextSeStringMode mode) =>
+        ImGui.Font.WithStyle(this.textStyle with { SeStringMode = mode });
+
+    private void DrawSeString(ImU8String text, ImTextSeStringMode mode)
     {
+        using var pushCallback = SeStringCallbackStack.Push(this);
+        using var pushWrap = this.wrap ? ImRaii.TextWrapPos(0) : null;
+        using var alpha = ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * this.opacity);
+        using var font = ImRaii.PushFont(this.FontFor(mode));
+        ImGui.Text(text);
+    }
+
+    private SeStringEntity GetEntity(scoped in SeStringEntityContext context)
+    {
+        var span = context.Text[context.ByteOffset..];
+        var fontSize = context.FontSize;
         if (!this.useEntity)
             return default;
-        if (state.Span[byteOffset..].StartsWith("Dalamud"u8))
-            return new(7, new(state.FontSize, state.FontSize), DrawDalamud);
-        if (state.Span[byteOffset..].StartsWith("White"u8))
-            return new(5, new(state.FontSize, state.FontSize), DrawWhite);
-        if (state.Span[byteOffset..].StartsWith("DefaultIcon"u8))
-            return new(11, new(state.FontSize, state.FontSize), DrawDefaultIcon);
-        if (state.Span[byteOffset..].StartsWith("DisabledIcon"u8))
-            return new(12, new(state.FontSize, state.FontSize), DrawDisabledIcon);
-        if (state.Span[byteOffset..].StartsWith("OutdatedInstallableIcon"u8))
-            return new(23, new(state.FontSize, state.FontSize), DrawOutdatedInstallableIcon);
-        if (state.Span[byteOffset..].StartsWith("TroubleIcon"u8))
-            return new(11, new(state.FontSize, state.FontSize), DrawTroubleIcon);
-        if (state.Span[byteOffset..].StartsWith("DevPluginIcon"u8))
-            return new(13, new(state.FontSize, state.FontSize), DrawDevPluginIcon);
-        if (state.Span[byteOffset..].StartsWith("UpdateIcon"u8))
-            return new(10, new(state.FontSize, state.FontSize), DrawUpdateIcon);
-        if (state.Span[byteOffset..].StartsWith("ThirdIcon"u8))
-            return new(9, new(state.FontSize, state.FontSize), DrawThirdIcon);
-        if (state.Span[byteOffset..].StartsWith("ThirdInstalledIcon"u8))
-            return new(18, new(state.FontSize, state.FontSize), DrawThirdInstalledIcon);
-        if (state.Span[byteOffset..].StartsWith("ChangelogApiBumpIcon"u8))
-            return new(20, new(state.FontSize, state.FontSize), DrawChangelogApiBumpIcon);
-        if (state.Span[byteOffset..].StartsWith("InstalledIcon"u8))
-            return new(13, new(state.FontSize, state.FontSize), DrawInstalledIcon);
-        if (state.Span[byteOffset..].StartsWith("tex("u8))
+        if (span.StartsWith("Dalamud"u8))
+            return new(7, new(fontSize, fontSize), DrawDalamud);
+        if (span.StartsWith("White"u8))
+            return new(5, new(fontSize, fontSize), DrawWhite);
+        if (span.StartsWith("DefaultIcon"u8))
+            return new(11, new(fontSize, fontSize), DrawDefaultIcon);
+        if (span.StartsWith("DisabledIcon"u8))
+            return new(12, new(fontSize, fontSize), DrawDisabledIcon);
+        if (span.StartsWith("OutdatedInstallableIcon"u8))
+            return new(23, new(fontSize, fontSize), DrawOutdatedInstallableIcon);
+        if (span.StartsWith("TroubleIcon"u8))
+            return new(11, new(fontSize, fontSize), DrawTroubleIcon);
+        if (span.StartsWith("DevPluginIcon"u8))
+            return new(13, new(fontSize, fontSize), DrawDevPluginIcon);
+        if (span.StartsWith("UpdateIcon"u8))
+            return new(10, new(fontSize, fontSize), DrawUpdateIcon);
+        if (span.StartsWith("ThirdIcon"u8))
+            return new(9, new(fontSize, fontSize), DrawThirdIcon);
+        if (span.StartsWith("ThirdInstalledIcon"u8))
+            return new(18, new(fontSize, fontSize), DrawThirdInstalledIcon);
+        if (span.StartsWith("ChangelogApiBumpIcon"u8))
+            return new(20, new(fontSize, fontSize), DrawChangelogApiBumpIcon);
+        if (span.StartsWith("InstalledIcon"u8))
+            return new(13, new(fontSize, fontSize), DrawInstalledIcon);
+        if (span.StartsWith("tex("u8))
         {
-            var off = state.Span[byteOffset..].IndexOf((byte)')');
+            var off = span.IndexOf((byte)')');
             var tex = Service<TextureManager>
                       .Get()
                       .Shared
-                      .GetFromGame(Encoding.UTF8.GetString(state.Span[(byteOffset + 4)..(byteOffset + off)]))
+                      .GetFromGame(Encoding.UTF8.GetString(span[4..off]))
                       .GetWrapOrEmpty();
-            return new(off + 1, tex.Size * (state.FontSize / tex.Size.Y), DrawTexture);
+            return new(off + 1, tex.Size * (fontSize / tex.Size.Y), DrawTexture);
         }
 
-        if (state.Span[byteOffset..].StartsWith("icon("u8))
+        if (span.StartsWith("icon("u8))
         {
-            var off = state.Span[byteOffset..].IndexOf((byte)')');
-            if (int.TryParse(state.Span[(byteOffset + 5)..(byteOffset + off)], out var parsed))
+            var off = span.IndexOf((byte)')');
+            if (int.TryParse(span[5..off], out var parsed))
             {
                 var tex = Service<TextureManager>
                           .Get()
                           .Shared
                           .GetFromGameIcon(parsed)
                           .GetWrapOrEmpty();
-                return new(off + 1, tex.Size * (state.FontSize / tex.Size.Y), DrawIcon);
+                return new(off + 1, tex.Size * (fontSize / tex.Size.Y), DrawIcon);
             }
         }
 
         return default;
 
-        static void DrawTexture(scoped in SeStringDrawState state, int byteOffset, Vector2 offset)
+        static void DrawTexture(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context)
         {
-            var off = state.Span[byteOffset..].IndexOf((byte)')');
+            var span = context.Text[context.ByteOffset..];
+            var off = span.IndexOf((byte)')');
             var tex = Service<TextureManager>
                       .Get()
                       .Shared
-                      .GetFromGame(Encoding.UTF8.GetString(state.Span[(byteOffset + 4)..(byteOffset + off)]))
+                      .GetFromGame(Encoding.UTF8.GetString(span[4..off]))
                       .GetWrapOrEmpty();
-            state.Draw(
-                tex.Handle,
-                offset + new Vector2(0, (state.LineHeight - state.FontSize) / 2),
-                tex.Size * (state.FontSize / tex.Size.Y),
-                Vector2.Zero,
-                Vector2.One);
+            drawList.AddImage(tex.Handle, topLeft, topLeft + (tex.Size * (context.FontSize / tex.Size.Y)));
         }
 
-        static void DrawIcon(scoped in SeStringDrawState state, int byteOffset, Vector2 offset)
+        static void DrawIcon(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context)
         {
-            var off = state.Span[byteOffset..].IndexOf((byte)')');
-            if (!int.TryParse(state.Span[(byteOffset + 5)..(byteOffset + off)], out var parsed))
+            var span = context.Text[context.ByteOffset..];
+            var off = span.IndexOf((byte)')');
+            if (!int.TryParse(span[5..off], out var parsed))
                 return;
             var tex = Service<TextureManager>
                       .Get()
                       .Shared
                       .GetFromGameIcon(parsed)
                       .GetWrapOrEmpty();
-            state.Draw(
-                tex.Handle,
-                offset + new Vector2(0, (state.LineHeight - state.FontSize) / 2),
-                tex.Size * (state.FontSize / tex.Size.Y),
-                Vector2.Zero,
-                Vector2.One);
+            drawList.AddImage(tex.Handle, topLeft, topLeft + (tex.Size * (context.FontSize / tex.Size.Y)));
         }
 
-        static void DrawAsset(scoped in SeStringDrawState state, Vector2 offset, DalamudAsset asset) =>
-            state.Draw(
+        static void DrawAsset(
+            ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context, DalamudAsset asset) =>
+            drawList.AddImage(
                 Service<DalamudAssetManager>.Get().GetDalamudTextureWrap(asset).Handle,
-                offset + new Vector2(0, (state.LineHeight - state.FontSize) / 2),
-                new(state.FontSize, state.FontSize),
-                Vector2.Zero,
-                Vector2.One);
+                topLeft,
+                topLeft + new Vector2(context.FontSize));
 
-        static void DrawDalamud(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.LogoSmall);
+        static void DrawDalamud(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context) =>
+            DrawAsset(drawList, topLeft, context, DalamudAsset.LogoSmall);
 
-        static void DrawWhite(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.White4X4);
+        static void DrawWhite(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context) =>
+            DrawAsset(drawList, topLeft, context, DalamudAsset.White4X4);
 
-        static void DrawDefaultIcon(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.DefaultIcon);
+        static void DrawDefaultIcon(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context) =>
+            DrawAsset(drawList, topLeft, context, DalamudAsset.DefaultIcon);
 
-        static void DrawDisabledIcon(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.DisabledIcon);
+        static void DrawDisabledIcon(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context) =>
+            DrawAsset(drawList, topLeft, context, DalamudAsset.DisabledIcon);
 
-        static void DrawOutdatedInstallableIcon(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.OutdatedInstallableIcon);
+        static void DrawOutdatedInstallableIcon(
+            ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context) =>
+            DrawAsset(drawList, topLeft, context, DalamudAsset.OutdatedInstallableIcon);
 
-        static void DrawTroubleIcon(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.TroubleIcon);
+        static void DrawTroubleIcon(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context) =>
+            DrawAsset(drawList, topLeft, context, DalamudAsset.TroubleIcon);
 
-        static void DrawDevPluginIcon(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.DevPluginIcon);
+        static void DrawDevPluginIcon(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context) =>
+            DrawAsset(drawList, topLeft, context, DalamudAsset.DevPluginIcon);
 
-        static void DrawUpdateIcon(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.UpdateIcon);
+        static void DrawUpdateIcon(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context) =>
+            DrawAsset(drawList, topLeft, context, DalamudAsset.UpdateIcon);
 
-        static void DrawInstalledIcon(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.InstalledIcon);
+        static void DrawInstalledIcon(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context) =>
+            DrawAsset(drawList, topLeft, context, DalamudAsset.InstalledIcon);
 
-        static void DrawThirdIcon(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.ThirdIcon);
+        static void DrawThirdIcon(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context) =>
+            DrawAsset(drawList, topLeft, context, DalamudAsset.ThirdIcon);
 
-        static void DrawThirdInstalledIcon(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.ThirdInstalledIcon);
+        static void DrawThirdInstalledIcon(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context) =>
+            DrawAsset(drawList, topLeft, context, DalamudAsset.ThirdInstalledIcon);
 
-        static void DrawChangelogApiBumpIcon(scoped in SeStringDrawState state, int byteOffset, Vector2 offset) =>
-            DrawAsset(state, offset, DalamudAsset.ChangelogApiBumpIcon);
+        static void DrawChangelogApiBumpIcon(ImDrawListPtr drawList, Vector2 topLeft, in SeStringEntityContext context)
+            => DrawAsset(drawList, topLeft, context, DalamudAsset.ChangelogApiBumpIcon);
     }
 }

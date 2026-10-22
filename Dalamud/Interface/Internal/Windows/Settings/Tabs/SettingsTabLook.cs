@@ -9,13 +9,14 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Configuration.Internal;
 using Dalamud.Game;
 using Dalamud.Interface.Colors;
-using Dalamud.Interface.FontIdentifier;
-using Dalamud.Interface.GameFonts;
+using Dalamud.Interface.Fonts;
+using Dalamud.Interface.Fonts.Internal;
+using Dalamud.Interface.Fonts.Internal.Glyphs;
 using Dalamud.Interface.ImGuiFontChooserDialog;
 using Dalamud.Interface.ImGuiNotification.Internal;
 using Dalamud.Interface.Internal.Windows.Settings.Widgets;
-using Dalamud.Interface.ManagedFontAtlas.Internals;
 using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
 using Dalamud.Utility.Internal;
 
@@ -38,6 +39,7 @@ internal sealed class SettingsTabLook : SettingsTab
 
     private float globalUiScale;
     private IFontSpec defaultFontSpec = null!;
+    private bool useSubpixelRendering;
 
     public override string Title => Loc.Localize("DalamudSettingsVisual", "Look & Feel");
 
@@ -198,7 +200,7 @@ internal sealed class SettingsTabLook : SettingsTab
         var fontBuildTask = interfaceManager.FontBuildTask;
 
         ImGui.AlignTextToFramePadding();
-        ImGui.Text(Loc.Localize("DalamudSettingsGlobalUiScale", "Global Font Scale"));
+        ImGui.Text(Loc.Localize("DalamudSettingsGlobalUiScale", "Global UI Scale"));
 
         var buttonSize =
             GlobalUiScalePresets
@@ -231,7 +233,7 @@ internal sealed class SettingsTabLook : SettingsTab
         }
 
         var globalUiScaleInPct = 100f * this.globalUiScale;
-        if (ImGui.DragFloat("##DalamudSettingsGlobalUiScaleDrag"u8, ref globalUiScaleInPct, 1f, 80f, 300f, "%.0f%%", ImGuiSliderFlags.AlwaysClamp))
+        if (ImGui.DragFloat("##DalamudSettingsGlobalUiScaleDrag"u8, ref globalUiScaleInPct, 1f, 50f, 300f, "%.0f%%", ImGuiSliderFlags.AlwaysClamp))
         {
             this.globalUiScale = globalUiScaleInPct / 100f;
             ImGui.GetStyle().FontScaleMain = this.globalUiScale;
@@ -258,8 +260,7 @@ internal sealed class SettingsTabLook : SettingsTab
 
         if (ImGui.Button(Loc.Localize("DalamudSettingChooseDefaultFont", "Choose Default Font")))
         {
-            var faf = Service<FontAtlasFactory>.Get();
-            var fcd = new SingleFontChooserDialog(faf, $"{nameof(SettingsTabLook)}:Default");
+            var fcd = new SingleFontChooserDialog();
             fcd.SelectedFont = (SingleFontSpec)this.defaultFontSpec;
             fcd.FontFamilyExcludeFilter = x => x is DalamudDefaultFontAndFamilyId;
             fcd.SetPopupPositionAndSizeToCurrentWindowCenter();
@@ -275,7 +276,7 @@ internal sealed class SettingsTabLook : SettingsTab
                         if (!r.IsCompletedSuccessfully)
                             return;
 
-                        faf.DefaultFontSpecOverride = this.defaultFontSpec = r.Result;
+                        Service<FontFactory>.Get().DefaultFontSpecOverride = this.defaultFontSpec = r.Result;
                         interfaceManager.RebuildFonts();
                         Service<InterfaceManager>.Get().InvokeFontChanged();
                     }));
@@ -283,12 +284,11 @@ internal sealed class SettingsTabLook : SettingsTab
 
         ImGui.SameLine();
 
-        using (interfaceManager.MonoFontHandle?.Push())
+        using (FontSpec.Mono.Push())
         {
             if (ImGui.Button(Loc.Localize("DalamudSettingResetDefaultFont", "Reset Default Font")))
             {
-                var faf = Service<FontAtlasFactory>.Get();
-                faf.DefaultFontSpecOverride =
+                Service<FontFactory>.Get().DefaultFontSpecOverride =
                     this.defaultFontSpec =
                         new SingleFontSpec { FontId = new GameFontAndFamilyId(GameFontFamily.Axis) };
                 interfaceManager.RebuildFonts();
@@ -296,13 +296,33 @@ internal sealed class SettingsTabLook : SettingsTab
             }
         }
 
+        ImGuiHelpers.ScaledDummy(5);
+
+        using (ImRaii.Disabled(!SubpixelSettings.Available))
+        {
+            if (ImGui.Checkbox(
+                    Loc.Localize("DalamudSettingUseSubpixelRendering", "Use subpixel rendering"),
+                    ref this.useSubpixelRendering))
+            {
+                SubpixelSettings.Override = this.useSubpixelRendering;
+            }
+        }
+
+        ImGui.TextColoredWrapped(
+            ImGuiColors.DalamudGrey,
+            Loc.Localize(
+                "DalamudSettingUseSubpixelRenderingHint",
+                "Draws text like ClearType does when possible."));
+
         base.Draw();
     }
 
     public override void Load()
     {
         this.globalUiScale = Service<DalamudConfiguration>.Get().GlobalUiScale;
-        this.defaultFontSpec = Service<FontAtlasFactory>.Get().DefaultFontSpec;
+        this.defaultFontSpec = Service<FontFactory>.Get().DefaultFontSpec;
+        this.useSubpixelRendering = Service<DalamudConfiguration>.Get().UseSubpixelRendering;
+        SubpixelSettings.Refresh(Service<InterfaceManager>.Get().GameWindowHandle);
 
         base.Load();
     }
@@ -311,6 +331,8 @@ internal sealed class SettingsTabLook : SettingsTab
     {
         Service<DalamudConfiguration>.Get().GlobalUiScale = this.globalUiScale;
         Service<DalamudConfiguration>.Get().DefaultFontSpec = this.defaultFontSpec;
+        Service<DalamudConfiguration>.Get().UseSubpixelRendering = this.useSubpixelRendering;
+        SubpixelSettings.Requested = this.useSubpixelRendering;
 
         base.Save();
     }
