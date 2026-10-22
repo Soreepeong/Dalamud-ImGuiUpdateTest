@@ -18,6 +18,9 @@ using Dalamud.Game.ClientState.Keys;
 using Dalamud.Hooking;
 using Dalamud.Hooking.Internal;
 using Dalamud.Hooking.WndProcHook;
+using Dalamud.Interface.Fonts;
+using Dalamud.Interface.Fonts.Internal;
+using Dalamud.Interface.Fonts.Internal.Glyphs;
 using Dalamud.Interface.ImGuiBackend;
 using Dalamud.Interface.ImGuiBackend.Delegates;
 using Dalamud.Interface.ImGuiNotification;
@@ -25,8 +28,6 @@ using Dalamud.Interface.ImGuiNotification.Internal;
 using Dalamud.Interface.Internal.Asserts;
 using Dalamud.Interface.Internal.DesignSystem;
 using Dalamud.Interface.Internal.ReShadeHandling;
-using Dalamud.Interface.ManagedFontAtlas;
-using Dalamud.Interface.ManagedFontAtlas.Internals;
 using Dalamud.Interface.Style;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
@@ -117,8 +118,7 @@ internal partial class InterfaceManager : IInternalDisposableService
     private ObjectVTableHook<IDXGISwapChain4.Vtbl<IDXGISwapChain4>>? dxgiSwapChainHook;
     private ReShadeAddonInterface? reShadeAddonInterface;
 
-    private IFontAtlas? dalamudAtlas;
-    private LockedImFont? defaultFontResourceLock;
+    private Task? fontsReady;
 
     // can't access imgui IO before first present call
     private HWND gameWindowHandle;
@@ -153,13 +153,13 @@ internal partial class InterfaceManager : IInternalDisposableService
     /// <summary>
     /// Invoked when the default global scale used by ImGui has been changed through Dalamud.
     /// </summary>
-    /// <remarks> Fonts will generally not have finished rebuilding when this is invoked, so if you need to access the font you should subscribe to <seealso cref="DefaultFontHandle"/>.ImFontChanged instead.</remarks>
     public event Action? DefaultGlobalScaleChanged;
 
     /// <summary>
     /// Invoked when the default font used by ImGui has been changed through Dalamud.
     /// </summary>
-    /// <remarks> Fonts will generally not have finished rebuilding when this is invoked, so if you need to access the font you should subscribe to <seealso cref="DefaultFontHandle"/>.ImFontChanged instead.</remarks>
+    /// <remarks>Fonts involving <see cref="DalamudDefaultFontAndFamilyId"/> might not have been made again yet when
+    /// this is invoked.</remarks>
     public event Action? DefaultFontChanged;
 
     /// <summary>
@@ -171,49 +171,41 @@ internal partial class InterfaceManager : IInternalDisposableService
     /// Gets the default ImGui font.<br />
     /// <strong>Accessing this static property outside of the main thread is dangerous and not supported.</strong>
     /// </summary>
-    public static ImFontPtr DefaultFont =>
-        WhenFontsReady().DefaultFontHandle!.Font;
+    public static ImFontPtr DefaultFont => WhenFontsReady().DefaultFontRef!;
 
     /// <summary>
     /// Gets an included FontAwesome icon font.<br />
     /// <strong>Accessing this static property outside of the main thread is dangerous and not supported.</strong>
     /// </summary>
-    public static ImFontPtr IconFont =>
-        WhenFontsReady().IconFontHandle!.Font;
+    public static ImFontPtr IconFont => WhenFontsReady().IconFontRef!;
 
     /// <summary>
     /// Gets an included FontAwesome icon font with fixed width.
     /// <strong>Accessing this static property outside of the main thread is dangerous and not supported.</strong>
     /// </summary>
-    public static ImFontPtr IconFontFixedWidth =>
-        WhenFontsReady().IconFontFixedWidthHandle!.Font;
+    public static ImFontPtr IconFontFixedWidth => WhenFontsReady().IconFontFixedWidthRef!;
 
     /// <summary>
     /// Gets an included monospaced font.<br />
     /// <strong>Accessing this static property outside of the main thread is dangerous and not supported.</strong>
     /// </summary>
-    public static ImFontPtr MonoFont =>
-        WhenFontsReady().MonoFontHandle!.Font;
+    public static ImFontPtr MonoFont => WhenFontsReady().MonoFontRef!;
 
-    /// <summary>
-    /// Gets the default font handle.
-    /// </summary>
-    public FontHandle? DefaultFontHandle { get; private set; }
+    /// <summary>Gets the default font, once loaded.</summary>
+    /// <seealso cref="FontSpec.Default"/>
+    public ImFontRef? DefaultFontRef { get; private set; }
 
-    /// <summary>
-    /// Gets the icon font handle.
-    /// </summary>
-    public FontHandle? IconFontHandle { get; private set; }
+    /// <summary>Gets the icon font, once loaded.</summary>
+    /// <seealso cref="FontSpec.Icon"/>
+    public ImFontRef? IconFontRef { get; private set; }
 
-    /// <summary>
-    /// Gets the icon font handle with fixed width.
-    /// </summary>
-    public FontHandle? IconFontFixedWidthHandle { get; private set; }
+    /// <summary>Gets the icon font with fixed width, once loaded.</summary>
+    /// <seealso cref="FontSpec.IconFixedWidth"/>
+    public ImFontRef? IconFontFixedWidthRef { get; private set; }
 
-    /// <summary>
-    /// Gets the mono font handle.
-    /// </summary>
-    public FontHandle? MonoFontHandle { get; private set; }
+    /// <summary>Gets the monospaced font, once loaded.</summary>
+    /// <seealso cref="FontSpec.Mono"/>
+    public ImFontRef? MonoFontRef { get; private set; }
 
     /// <summary>
     /// Gets or sets the pointer to ImGui.IO(), when it was last used.
@@ -285,7 +277,7 @@ internal partial class InterfaceManager : IInternalDisposableService
     /// <summary>
     /// Gets the font build task.
     /// </summary>
-    public Task FontBuildTask => WhenFontsReady().dalamudAtlas!.BuildTask;
+    public Task FontBuildTask => WhenFontsReady().fontsReady!;
 
     /// <summary>Gets the number of calls to <see cref="DxgiSwapChainPresentDetour"/> so far.</summary>
     /// <remarks>
@@ -329,23 +321,10 @@ internal partial class InterfaceManager : IInternalDisposableService
 
         // Below this point, hooks are guaranteed to be no longer called.
 
-        // A font resource lock outlives the parent handle and the owner atlas. It should be disposed.
-        Interlocked.Exchange(ref this.defaultFontResourceLock, null)?.Dispose();
+        if (Service<FontResolver>.GetNullable() is { } fontResolver)
+            fontResolver.DefaultFontChanged -= this.OnDefaultFontChanged;
+        this.DefaultFontRef = this.IconFontRef = this.IconFontFixedWidthRef = this.MonoFontRef = null;
 
-        // Font handles become invalid after disposing the atlas, but just to be safe.
-        this.DefaultFontHandle?.Dispose();
-        this.DefaultFontHandle = null;
-
-        this.MonoFontHandle?.Dispose();
-        this.MonoFontHandle = null;
-
-        this.IconFontHandle?.Dispose();
-        this.IconFontHandle = null;
-
-        this.IconFontFixedWidthHandle?.Dispose();
-        this.IconFontFixedWidthHandle = null;
-
-        Interlocked.Exchange(ref this.dalamudAtlas, null)?.Dispose();
         Interlocked.Exchange(ref this.backend, null)?.Dispose();
     }
 
@@ -356,8 +335,8 @@ internal partial class InterfaceManager : IInternalDisposableService
     {
         Log.Verbose("[FONT] RebuildFonts() called");
 
-        // Every atlas builds its fonts again; the ones ending with the default font pick up the change.
-        Service<FontAtlasFactory>.GetNullable()?.InvalidateDefaultChain();
+        // Every atlas builds its fonts again. The ones ending with the default font pick up the change.
+        Service<FontFactory>.GetNullable()?.InvalidateDefaultChain();
     }
 
     /// <summary>
@@ -553,11 +532,11 @@ internal partial class InterfaceManager : IInternalDisposableService
     private static InterfaceManager WhenFontsReady()
     {
         var im = Service<InterfaceManager>.GetNullable();
-        if (im?.dalamudAtlas is not { } atlas)
+        if (im?.fontsReady is not { } ready)
             throw new InvalidOperationException($"Tried to access fonts before {nameof(SetupHooks)} call.");
 
-        if (!atlas.HasBuiltAtlas)
-            atlas.BuildTask.GetAwaiter().GetResult();
+        if (!ready.IsCompleted)
+            ready.GetAwaiter().GetResult();
         return im;
     }
 
@@ -605,7 +584,7 @@ internal partial class InterfaceManager : IInternalDisposableService
 
         try
         {
-            this.SetupHooks(Service<FontAtlasFactory>.Get());
+            this.SetupHooks();
         }
         catch (Exception ex)
         {
@@ -647,16 +626,16 @@ internal partial class InterfaceManager : IInternalDisposableService
         if (!SwapChainHelper.IsGameDeviceSwapChain(swapChain))
             return null;
 
-        Debug.Assert(this.dalamudAtlas is not null, "dalamudAtlas should have been set already");
+        Debug.Assert(this.fontsReady is not null, "fontsReady should have been set already");
 
         var activeBackend = this.backend ?? this.InitBackend(swapChain);
 
-        if (!this.dalamudAtlas!.HasBuiltAtlas)
+        if (!this.fontsReady!.IsCompletedSuccessfully)
         {
-            if (this.dalamudAtlas.BuildTask.Exception != null)
+            if (this.fontsReady.Exception != null)
             {
                 // TODO: Can we do something more user-friendly here? Unload instead?
-                Log.Error(this.dalamudAtlas.BuildTask.Exception, "Failed to initialize Dalamud base fonts");
+                Log.Error(this.fontsReady.Exception, "Failed to initialize Dalamud base fonts");
                 Util.Fatal("Failed to initialize Dalamud base fonts.\nPlease report this error.", "Dalamud");
             }
 
@@ -777,6 +756,8 @@ internal partial class InterfaceManager : IInternalDisposableService
             style.Apply();
 
             ImGui.GetStyle().FontScaleMain = configuration.GlobalUiScale;
+            SubpixelSettings.Requested = configuration.UseSubpixelRendering;
+            SubpixelSettings.Refresh(this.GameWindowHandle);
 
             if (!configuration.IsDocking)
             {
@@ -858,84 +839,55 @@ internal partial class InterfaceManager : IInternalDisposableService
             while (this.deferredDisposeDisposables.TryTake(out var d))
                 d.Dispose();
         }
+
+        // Fonts and glyphs used in this frame may be released from now on. Glyphs rasterized on the thread pool are
+        // packed before the atlas makes its changes, to be drawn from the next frame on.
+        Service<FontResolver>.GetNullable()?.OnFrameRendered();
+        GlyphAtlas.Shared.EndFrame();
     }
 
-    private unsafe void SetupHooks(
-        FontAtlasFactory fontAtlasFactory)
+    /// <summary>Makes ImGui use the default font before a new frame begins.</summary>
+        this.UpdateGlyphBudget();
+        GlyphRasterQueue.EndFrame();
+    private unsafe void ApplyDefaultFont()
+        FontProfiler.EndFrame();
     {
-        this.dalamudAtlas = fontAtlasFactory
-            .CreateFontAtlas(nameof(InterfaceManager), FontAtlasAutoRebuildMode.Disable);
-        using (this.dalamudAtlas.SuppressAutoRebuild())
-        {
-            this.DefaultFontHandle = (FontHandle)this.dalamudAtlas.NewDelegateFontHandle(
-                e => e.OnPreBuild(tk => tk.AddDalamudDefaultFont(Service<FontAtlasFactory>.Get().DefaultSizePx)));
-            this.IconFontHandle = (FontHandle)this.dalamudAtlas.NewDelegateFontHandle(
-                e => e.OnPreBuild(
-                    tk => tk.AddFontAwesomeIconFont(
-                        new()
-                        {
-                            SizePx = Service<FontAtlasFactory>.Get().DefaultFontSpec.SizePx,
-                            GlyphMinAdvanceX = DefaultFontSizePx,
-                            GlyphMaxAdvanceX = DefaultFontSizePx,
-                        })));
-            this.IconFontFixedWidthHandle = (FontHandle)this.dalamudAtlas.NewDelegateFontHandle(
-                e => e.OnPreBuild(tk => tk.AddDalamudAssetFont(
-                    DalamudAsset.FontAwesomeFreeSolid,
-                    new()
-                    {
-                        SizePx = Service<FontAtlasFactory>.Get().DefaultFontSpec.SizePx,
-                        GlyphRanges = [0x20, 0x20, 0x00],
-                    })));
-            this.MonoFontHandle = (FontHandle)this.dalamudAtlas.NewDelegateFontHandle(
-                e => e.OnPreBuild(
-                    tk => tk.AddDalamudAssetFont(
-                        DalamudAsset.InconsolataRegular,
-                        new()
-                        {
-                            SizePx = Service<FontAtlasFactory>.Get().DefaultFontSpec.SizePx,
-                        })));
-            this.dalamudAtlas.BuildStepChange += e => e.OnPostBuild(
-                tk =>
-                {
-                    // Fill missing glyphs in MonoFont from DefaultFont.
-                    tk.CopyGlyphsAcrossFonts(
-                        tk.GetFont(this.DefaultFontHandle),
-                        tk.GetFont(this.MonoFontHandle),
-                        missingOnly: true);
+        if (this.DefaultFontRef is not { } font)
+            return;
 
-                    // Fill missing glyphs in IconFontFixedWidth with IconFont and fit ratio
-                    tk.CopyGlyphsAcrossFonts(
-                        tk.GetFont(this.IconFontHandle),
-                        tk.GetFont(this.IconFontFixedWidthHandle),
-                        missingOnly: true);
-                    tk.FitRatio(tk.GetFont(this.IconFontFixedWidthHandle));
-                });
-            this.DefaultFontHandle.ImFontChanged += handle =>
-            {
-                var font = handle.Font;
-                font.AddRef();
-                var fontLocked = new LockedImFont(font);
-                var sizePx = ((FontHandle)handle).PushSize;
+        // Update the reference to the resources of the default font.
+        var factory = Service<FontFactory>.Get();
+        ImGui.GetIO().Handle->FontDefault = ((ImFontPtr)font).Handle;
+        ImGui.GetStyle().FontSizeBase = factory.DefaultSizePx * factory.DefaultLineHeightScale;
 
-                this.RunBeforeImGuiRender(
-                    () =>
-                    {
-                        // Update the ImGui default font.
-                        ImGui.GetIO().Handle->FontDefault = fontLocked.ImFont;
-                        ImGui.GetStyle().FontSizeBase = sizePx;
+        // Broadcast to auto-rebuilding instances.
+        this.AfterBuildFonts.InvokeSafely();
+    }
 
-                        // Update the reference to the resources of the default font.
-                        this.defaultFontResourceLock?.Dispose();
-                        this.defaultFontResourceLock = fontLocked;
+    /// <summary>Called before a frame once the fonts that follow the default font have been made again.</summary>
+    private void OnDefaultFontChanged() => this.ApplyDefaultFont();
 
-                        // Broadcast to auto-rebuilding instances.
-                        this.AfterBuildFonts.InvokeSafely();
-                    });
-            };
-        }
+    private unsafe void SetupHooks()
+    {
+        var fontResolver = Service<FontResolver>.Get();
+        fontResolver.DefaultFontChanged += this.OnDefaultFontChanged;
 
-        // This will wait for scene on its own. We just wait for this.dalamudAtlas.BuildTask in this.InitScene.
-        _ = this.dalamudAtlas.BuildFontsAsync();
+        this.fontsReady = Task.WhenAll(
+                                  fontResolver.GetAsync(FontSpec.Default),
+                                  fontResolver.GetAsync(FontSpec.Icon),
+                                  fontResolver.GetAsync(FontSpec.IconFixedWidth),
+                                  fontResolver.GetAsync(FontSpec.Mono))
+                              .ContinueWith(
+                                  t =>
+                                  {
+                                      var fonts = t.GetAwaiter().GetResult();
+                                      this.DefaultFontRef = fonts[0];
+                                      this.IconFontRef = fonts[1];
+                                      this.IconFontFixedWidthRef = fonts[2];
+                                      this.MonoFontRef = fonts[3];
+                                      _ = this.RunBeforeImGuiRender(this.ApplyDefaultFont);
+                                  },
+                                  TaskContinuationOptions.ExecuteSynchronously);
 
         SwapChainHelper.BusyWaitForGameDeviceSwapChain();
         var swapChainDesc = default(DXGI_SWAP_CHAIN_DESC);
