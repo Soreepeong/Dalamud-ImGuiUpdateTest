@@ -10,7 +10,7 @@ using Lumina.Text.Expressions;
 using Lumina.Text.Payloads;
 using Lumina.Text.ReadOnly;
 
-namespace Dalamud.Interface.ImGuiSeStringRenderer.Internal;
+namespace Dalamud.Interface.Fonts.Internal.SeStrings;
 
 /// <summary>Color stacks to use while evaluating a SeString.</summary>
 internal sealed class SeStringColorStackSet

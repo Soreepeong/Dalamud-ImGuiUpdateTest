@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 using Dalamud.Game.Text;
 using Dalamud.Interface;
-using Dalamud.Interface.FontIdentifier;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.Internal;
 using Dalamud.Interface.Internal.ReShadeHandling;
 using Dalamud.Interface.Style;
@@ -46,6 +46,7 @@ internal sealed class DalamudConfiguration : IInternalDisposableService
         TypeNameHandling = TypeNameHandling.All,
         TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple,
         Formatting = Formatting.Indented,
+        SerializationBinder = MovedTypeSerializationBinder.Instance,
     };
 
     [JsonIgnore]
@@ -171,6 +172,11 @@ internal sealed class DalamudConfiguration : IInternalDisposableService
     /// Gets or sets the default font spec.
     /// </summary>
     public IFontSpec? DefaultFontSpec { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether text is drawn with subpixel rendering, where ClearType is on.
+    /// </summary>
+    public bool UseSubpixelRendering { get; set; }
 
     /// <summary>Gets or sets the opacity of the IME state indicator.</summary>
     /// <value>0 will hide the state indicator. 1 will make the state indicator fully visible. Values outside the

@@ -9,7 +9,7 @@ using System.Text.Unicode;
 
 using Dalamud.Interface.ManagedFontAtlas.Internals;
 
-namespace Dalamud.Interface.ManagedFontAtlas;
+namespace Dalamud.Interface.Fonts;
 
 /// <summary>A fluent ImGui glyph range builder.</summary>
 [SuppressMessage(

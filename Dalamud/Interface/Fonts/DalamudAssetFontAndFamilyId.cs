@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 using TerraFX.Interop.DirectX;
 
-namespace Dalamud.Interface.FontIdentifier;
+namespace Dalamud.Interface.Fonts;
 
 /// <summary>
 /// Represents a font from Dalamud assets.
