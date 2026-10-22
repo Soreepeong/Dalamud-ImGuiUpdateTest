@@ -3,7 +3,8 @@ using System.Diagnostics.CodeAnalysis;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Bindings.ImGuizmo;
 using Dalamud.Bindings.ImPlot;
-using Dalamud.Interface.Fonts.Internal;
+using Dalamud.Interface.Fonts.Internal.Glyphs;
+using Dalamud.Interface.Fonts.Internal.Layout;
 using Dalamud.Interface.ImGuiBackend.Delegates;
 using Dalamud.Interface.ImGuiBackend.Helpers;
 using Dalamud.Interface.ImGuiBackend.InputHandler;
@@ -162,7 +163,7 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
         this.NewInputFrame?.Invoke();
 
         ImGui.NewFrame();
-        ImGui.ShrinkTextStyleStack(0);
+        TextCallbackStack.Shrink(0);
         ImGuizmo.BeginFrame();
 
         this.BuildUi?.Invoke();
