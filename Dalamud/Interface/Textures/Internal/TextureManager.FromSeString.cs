@@ -1,5 +1,7 @@
-using Dalamud.Interface.ImGuiSeStringRenderer;
-using Dalamud.Interface.ImGuiSeStringRenderer.Internal;
+using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Fonts;
+using Dalamud.Interface.Fonts.Internal.Glyphs;
+using Dalamud.Interface.Fonts.Internal.SeStrings;
 using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Utility;
 
@@ -9,16 +11,25 @@ namespace Dalamud.Interface.Textures.Internal;
 internal sealed partial class TextureManager
 {
     [ServiceManager.ServiceDependency]
-    private readonly SeStringRenderer seStringRenderer = Service<SeStringRenderer>.Get();
+    private readonly SeStringLayouter seStringLayouter = Service<SeStringLayouter>.Get();
 
     /// <inheritdoc/>
     public IDalamudTextureWrap CreateTextureFromSeString(
         ReadOnlySpan<byte> text,
-        scoped in SeStringDrawParams drawParams = default,
+        ImFontPtr font = default,
+        float fontSizePx = 0,
+        float wrapWidth = float.MaxValue,
         string? debugName = null)
     {
         ThreadSafety.AssertMainThread();
-        using var dd = this.seStringRenderer.CreateDrawData(text, drawParams);
+
+        // Drawn once, so with every glyph, however long rasterizing takes.
+        using var synchronous = GlyphRasterQueue.Synchronous();
+        using var dd = this.seStringLayouter.CreateDrawData(
+            text,
+            font.IsNull ? ImGui.Font : font,
+            fontSizePx > 0 ? fontSizePx : ImGui.GetFontSize(),
+            wrapWidth);
         var texture = this.CreateDrawListTexture(debugName ?? nameof(this.CreateTextureFromSeString));
         try
         {

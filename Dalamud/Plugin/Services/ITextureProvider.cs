@@ -6,7 +6,6 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.ImGuiSeStringRenderer;
 using Dalamud.Interface.Internal.Windows.Data.Widgets;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Textures.TextureWraps;
@@ -52,7 +51,9 @@ public interface ITextureProvider : IDalamudService
     /// <param name="debugName">Name for debug display purposes.</param>
     /// <returns>A new draw list texture.</returns>
     /// <remarks>No new resource is allocated upfront; it will be done when <see cref="IDrawListTextureWrap.Size"/> is
-    /// set with positive values for both components.</remarks>
+    /// set with positive values for both components. Text in a draw list drawn into it once should be drawn into the
+    /// draw list within <see cref="Interface.Fonts.ImFontExtensions.PushCompleteGlyphs"/>, as glyphs not drawn
+    /// before may otherwise be missing.</remarks>
     IDrawListTextureWrap CreateDrawListTexture(string? debugName = null);
 
     /// <summary>Creates a texture from the given existing texture, cropping and converting pixel format as needed.
@@ -189,13 +190,18 @@ public interface ITextureProvider : IDalamudService
 
     /// <summary>Creates a texture by drawing a SeString onto it.</summary>
     /// <param name="text">SeString to render.</param>
-    /// <param name="drawParams">Parameters for drawing.</param>
+    /// <param name="font">The font.</param>
+    /// <param name="fontSizePx">The font size in pixels, or 0 for the current font size.</param>
+    /// <param name="wrapWidth">The width to wrap text at.</param>
     /// <param name="debugName">Name for debug display purposes.</param>
     /// <returns>The new texture.</returns>
-    /// <remarks>Can be only be used from the main thread.</remarks>
+    /// <remarks>Can be only be used from the main thread. Use <see cref="IFontService.PushTextCallback"/> for
+    /// customizing its behavior.</remarks>
     IDalamudTextureWrap CreateTextureFromSeString(
         ReadOnlySpan<byte> text,
-        scoped in SeStringDrawParams drawParams = default,
+        ImFontPtr font = default,
+        float fontSizePx = 0,
+        float wrapWidth = float.MaxValue,
         string? debugName = null);
 
     /// <summary>Gets the supported bitmap decoders.</summary>
