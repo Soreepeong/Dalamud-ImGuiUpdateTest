@@ -139,11 +139,27 @@ HRESULT WINAPI InitializeImpl(LPVOID lpParam, HANDLE hMainThreadContinue) {
                 D3D_FEATURE_LEVEL* pFeatureLevel,
                 ID3D11DeviceContext** ppImmediateContext
             ) -> HRESULT {
-                return s_hookD3D11CreateDevice.call_original(
+                const auto hr = s_hookD3D11CreateDevice.call_original(
                     pAdapter,
                     DriverType,
                     Software,
                     (Flags & ~D3D11_CREATE_DEVICE_PREVENT_ALTERING_LAYER_SETTINGS_FROM_REGISTRY) | D3D11_CREATE_DEVICE_DEBUG,
+                    pFeatureLevels,
+                    FeatureLevels,
+                    SDKVersion,
+                    ppDevice,
+                    pFeatureLevel,
+                    ppImmediateContext);
+                if (hr != DXGI_ERROR_SDK_COMPONENT_MISSING)
+                    return hr;
+
+                // The debug layer comes with "Graphics Tools" of the optional features of Windows.
+                logging::W("The D3D11 debug layer is not installed. Making the device without it.");
+                return s_hookD3D11CreateDevice.call_original(
+                    pAdapter,
+                    DriverType,
+                    Software,
+                    Flags,
                     pFeatureLevels,
                     FeatureLevels,
                     SDKVersion,
@@ -168,11 +184,18 @@ HRESULT WINAPI InitializeImpl(LPVOID lpParam, HANDLE hMainThreadContinue) {
             static hooks::direct_hook<decltype(CreateDXGIFactory1)> s_hookCreateDXGIFactory1(
                 "dxgi.dll!CreateDXGIFactory1",
                 pfnCreateDXGIFactory1);
+            static constexpr auto CreateDebugFactory = [](REFIID riid, _COM_Outptr_ void **ppFactory) -> HRESULT {
+                const auto hr = pfnCreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, ppFactory);
+                if (hr != DXGI_ERROR_SDK_COMPONENT_MISSING)
+                    return hr;
+                logging::W("The DXGI debug layer is not installed. Making the factory without it.");
+                return pfnCreateDXGIFactory2(0, riid, ppFactory);
+            };
             s_hookCreateDXGIFactory.set_detour([](REFIID riid, _COM_Outptr_ void **ppFactory) -> HRESULT {
-                return pfnCreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, ppFactory);
+                return CreateDebugFactory(riid, ppFactory);
             });
             s_hookCreateDXGIFactory1.set_detour([](REFIID riid, _COM_Outptr_ void **ppFactory) -> HRESULT {
-                return pfnCreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, ppFactory);
+                return CreateDebugFactory(riid, ppFactory);
             });
         } else {
             logging::W("Could not find dxgi!CreateDXGIFactory2.");

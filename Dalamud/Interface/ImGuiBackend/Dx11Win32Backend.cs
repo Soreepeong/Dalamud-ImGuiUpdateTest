@@ -7,6 +7,7 @@ using Dalamud.Interface.Fonts.Internal.Glyphs;
 using Dalamud.Interface.Fonts.Internal.Layout;
 using Dalamud.Interface.ImGuiBackend.Delegates;
 using Dalamud.Interface.ImGuiBackend.Helpers;
+using Dalamud.Interface.ImGuiBackend.Helpers.D3D11;
 using Dalamud.Interface.ImGuiBackend.InputHandler;
 using Dalamud.Interface.ImGuiBackend.Renderers;
 using Dalamud.Utility;
@@ -56,6 +57,8 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
             fixed (ID3D11DeviceContext** pp = &this.deviceContext.GetPinnableReference())
                 this.device.Get()->GetImmediateContext(pp);
 
+            this.Diagnostics = new(this.device, this.deviceContext);
+
             using var buffer = default(ComPtr<ID3D11Resource>);
             fixed (Guid* guid = &IID.IID_ID3D11Resource)
                 this.swapChain.Get()->GetBuffer(0, guid, (void**)buffer.GetAddressOf()).ThrowOnError();
@@ -74,7 +77,7 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
 
             ImGui.GetIO().ConfigFlags |= ImGuiConfigFlags.DockingEnable | ImGuiConfigFlags.ViewportsEnable;
 
-            this.imguiRenderer = new(this.SwapChain, this.Device, this.DeviceContext);
+            this.imguiRenderer = new(this.SwapChain, this.Device, this.DeviceContext) { Diagnostics = this.Diagnostics };
             this.imguiInput = new(this.WindowHandle);
         }
         catch
@@ -118,6 +121,9 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
     /// <inheritdoc/>
     public IImGuiRenderer Renderer => this.imguiRenderer;
 
+    /// <summary>Gets the breadcrumbs and debug layer messages of the device.</summary>
+    public D3D11Diagnostics? Diagnostics { get; private set; }
+
     /// <summary>
     /// Gets the pointer to an instance of <see cref="IDXGISwapChain"/>.
     /// </summary>
@@ -157,6 +163,7 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
     /// <inheritdoc/>
     public void Render()
     {
+        this.Diagnostics?.BeginFrame();
         this.imguiRenderer.OnNewFrame();
         this.NewRenderFrame?.Invoke();
         this.imguiInput.NewFrame(this.targetWidth, this.targetHeight);
@@ -174,6 +181,7 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
 
         ImGui.UpdatePlatformWindows();
         ImGui.RenderPlatformWindowsDefault();
+        this.Diagnostics?.Mark("frame ends");
     }
 
     /// <inheritdoc/>
@@ -235,6 +243,8 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
 
         this.imguiRenderer?.Dispose();
         this.imguiInput?.Dispose();
+        this.Diagnostics?.Dispose();
+        this.Diagnostics = null;
 
         GlyphAtlas.DisposeShared();
         ImPlot.DestroyContext();

@@ -23,6 +23,7 @@ using Dalamud.Interface.Fonts.Internal;
 using Dalamud.Interface.Fonts.Internal.Glyphs;
 using Dalamud.Interface.ImGuiBackend;
 using Dalamud.Interface.ImGuiBackend.Delegates;
+using Dalamud.Interface.ImGuiBackend.Helpers.D3D11;
 using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Interface.ImGuiNotification.Internal;
 using Dalamud.Interface.Internal.Asserts;
@@ -123,6 +124,7 @@ internal partial class InterfaceManager : IInternalDisposableService
     // can't access imgui IO before first present call
     private HWND gameWindowHandle;
     private bool lastWantCapture;
+    private bool deviceRemovedLogged;
     private bool isOverrideGameCursor = true;
 
     [ServiceManager.ServiceConstructor]
@@ -216,6 +218,9 @@ internal partial class InterfaceManager : IInternalDisposableService
     /// Gets the DX11 scene.
     /// </summary>
     public IImGuiBackend? Backend => this.backend;
+
+    /// <summary>Gets the breadcrumbs and debug layer messages of the game's device.</summary>
+    public D3D11Diagnostics? Diagnostics => (this.backend as Dx11Win32Backend)?.Diagnostics;
 
     /// <summary>
     /// Gets or sets a value indicating whether the game's cursor should be overridden with the ImGui cursor.
@@ -843,14 +848,14 @@ internal partial class InterfaceManager : IInternalDisposableService
         // Fonts and glyphs used in this frame may be released from now on. Glyphs rasterized on the thread pool are
         // packed before the atlas makes its changes, to be drawn from the next frame on.
         Service<FontResolver>.GetNullable()?.OnFrameRendered();
+        this.UpdateGlyphBudget();
+        GlyphRasterQueue.EndFrame();
         GlyphAtlas.Shared.EndFrame();
+        FontProfiler.EndFrame();
     }
 
     /// <summary>Makes ImGui use the default font before a new frame begins.</summary>
-        this.UpdateGlyphBudget();
-        GlyphRasterQueue.EndFrame();
     private unsafe void ApplyDefaultFont()
-        FontProfiler.EndFrame();
     {
         if (this.DefaultFontRef is not { } font)
             return;

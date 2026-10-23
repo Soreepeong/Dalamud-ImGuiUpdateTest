@@ -7,6 +7,8 @@ using Dalamud.Utility;
 using TerraFX.Interop.DirectX;
 using TerraFX.Interop.Windows;
 
+using static TerraFX.Interop.Windows.Windows;
+
 namespace Dalamud.Interface.Internal;
 
 /// <summary>
@@ -98,7 +100,33 @@ internal unsafe partial class InterfaceManager
         if (this.RenderDalamudCheckAndInitialize(swapChain, flags) is { } activeScene)
             this.RenderDalamudDraw(activeScene);
 
-        return this.dxgiSwapChainPresentHook!.Original(swapChain, syncInterval, flags);
+        var ret = this.dxgiSwapChainPresentHook!.Original(swapChain, syncInterval, flags);
+        if (ret is DXGI.DXGI_ERROR_DEVICE_REMOVED or DXGI.DXGI_ERROR_DEVICE_RESET)
+            this.LogDeviceRemoved(swapChain, ret);
+        return ret;
+    }
+
+    private void LogDeviceRemoved(IDXGISwapChain* swapChain, int presentResult)
+    {
+        if (this.Diagnostics is { } diagnostics)
+        {
+            diagnostics.ReportRemoval($"Present failed with 0x{presentResult:X08}");
+            return;
+        }
+
+        if (this.deviceRemovedLogged)
+            return;
+        this.deviceRemovedLogged = true;
+
+        var device = default(ComPtr<ID3D11Device>);
+        var reason = swapChain->GetDevice(__uuidof<ID3D11Device>(), (void**)device.GetAddressOf()).SUCCEEDED
+                         ? (int)device.Get()->GetDeviceRemovedReason()
+                         : 0;
+        device.Dispose();
+        Log.Error(
+            "Present failed with 0x{Result:X08}; the device was removed with reason 0x{Reason:X08}",
+            presentResult,
+            reason);
     }
 
     private int AsHookDxgiSwapChainResizeBuffersDetour(

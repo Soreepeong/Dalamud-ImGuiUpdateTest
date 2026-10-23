@@ -146,6 +146,10 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
     /// </summary>
     ~Dx11Renderer() => this.ReleaseUnmanagedResources();
 
+    /// <summary>Gets or sets where to mark the stages of drawing, for finding out what the GPU was doing when the
+    /// device was removed.</summary>
+    public D3D11Diagnostics? Diagnostics { get; set; }
+
     /// <inheritdoc/>
     public void Dispose()
     {
@@ -311,6 +315,8 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
         // Setup desired DX state
         this.glyphTextures = GlyphAtlas.Shared.Upload(this.device, this.context);
         this.SetupRenderState(drawData);
+        var viewportId = drawData.OwnerViewport.IsNull ? 0 : drawData.OwnerViewport.ID;
+        this.Diagnostics?.Mark("textures updated", viewportId);
 
         try
         {
@@ -376,6 +382,9 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
             D3D11_MAP.D3D11_MAP_WRITE_DISCARD,
             0,
             &textData).ThrowOnError();
+        // As the monitor the viewport is on wants.
+        var owner = drawData.OwnerViewport;
+        var monitor = SubpixelSettings.ForWindow(owner.IsNull ? default : (HWND)owner.Handle->PlatformHandle);
         *(TextConstants*)textData.pData = new()
         {
             GammaRatios = monitor.GammaRatios,
@@ -384,9 +393,6 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
             SubpixelAllowed = !clearRenderTarget && monitor.Subpixel ? 1 : 0,
             GrayscaleEnhancedContrast = monitor.GrayscaleEnhancedContrast,
             Bgr = monitor.Bgr ? 1 : 0,
-        // As the monitor the viewport is on wants.
-        var owner = drawData.OwnerViewport;
-        var monitor = SubpixelSettings.ForWindow(owner.IsNull ? default : (HWND)owner.Handle->PlatformHandle);
         };
         this.context.Get()->Unmap((ID3D11Resource*)this.textConstantBuffer.Get(), 0);
 
@@ -394,6 +400,7 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
         // (Because we merged all buffers into a single one, we maintain our own offset into them)
         var vertexOffset = 0;
         var indexOffset = 0;
+        var listIndex = 0;
         var clipOff = new Vector4(drawData.DisplayPos, drawData.DisplayPos.X, drawData.DisplayPos.Y);
         foreach (ref var cmdList in cmdLists)
         {
@@ -445,6 +452,8 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
                             var blurV4 = cmd.ClipRect - clipOff;
                             if (blurV4.X >= blurV4.Z || blurV4.Y >= blurV4.W)
                                 break;
+                            this.Diagnostics?.Mark(
+                                "draws before a blur", viewportId, listIndex, cmdList.Handle->OwnerName);
 
                             var w = (int)drawData.DisplaySize.X;
                             var h = (int)drawData.DisplaySize.Y;
@@ -633,10 +642,13 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
 
                             // Restore full ImGui render state for subsequent draw commands in this frame
                             this.SetupRenderState(drawData);
+                            this.Diagnostics?.Mark("blur", viewportId, listIndex, cmdList.Handle->OwnerName);
                             break;
                         }
 
                         // User callback, registered via ImDrawList::AddCallback()
+                        this.Diagnostics?.Mark(
+                            "draws before a callback", viewportId, listIndex, cmdList.Handle->OwnerName);
                         var userBlendColor = default(Vector4);
                         this.context.Get()->OMSetBlendState(
                             this.userCallbackBlendState,
@@ -647,6 +659,7 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
 
                         // Reset blend state to premultiplied again.
                         this.context.Get()->OMSetBlendState(this.blendState, (float*)&userBlendColor, 0xffffffff);
+                        this.Diagnostics?.Mark("callback", viewportId, listIndex, cmdList.Handle->OwnerName);
                         break;
                     }
                 }
@@ -654,6 +667,8 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
 
             indexOffset += cmdList.IdxBuffer.Size;
             vertexOffset += cmdList.VtxBuffer.Size;
+            this.Diagnostics?.Mark("draws", viewportId, listIndex, cmdList.Handle->OwnerName);
+            listIndex++;
         }
     }
 

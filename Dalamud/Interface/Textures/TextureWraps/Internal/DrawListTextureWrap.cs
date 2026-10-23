@@ -19,6 +19,7 @@ internal sealed unsafe partial class DrawListTextureWrap : IDrawListTextureWrap,
     private readonly IDalamudTextureWrap emptyTexture;
     private readonly LocalPlugin? plugin;
     private readonly string debugName;
+    private string? diagnosticsName;
 
     private ComPtr<ID3D11Device> device;
     private ComPtr<ID3D11DeviceContext> deviceContext;
@@ -201,6 +202,12 @@ internal sealed unsafe partial class DrawListTextureWrap : IDrawListTextureWrap,
         {
             Service<Renderer>.Get().RenderDrawData(this.rtvPremultiplied.Get(), drawData);
             Service<Renderer>.Get().MakeStraight(this.srvPremultiplied.Get(), this.rtv.Get());
+        }
+
+        if (Service<InterfaceManager>.GetNullable()?.Diagnostics is { } diagnostics)
+        {
+            this.diagnosticsName ??= this.plugin is null ? this.debugName : $"{this.plugin.Name}: {this.debugName}";
+            diagnostics.Mark("draw list texture", this.diagnosticsName);
         }
     }
 
