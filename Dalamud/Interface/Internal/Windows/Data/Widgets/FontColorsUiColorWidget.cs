@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Numerics;
-using System.Text;
 
 using Dalamud.Bindings.ImGui;
 using Dalamud.Data;
@@ -16,13 +15,13 @@ namespace Dalamud.Interface.Internal.Windows.Data.Widgets;
 /// <summary>
 /// Widget for displaying all UI Colors from Lumina.
 /// </summary>
-internal class UiColorWidget : IDataWindowWidget
+internal class FontColorsUiColorWidget : IDataWindowWidget
 {
     /// <inheritdoc/>
     public string[]? CommandShortcuts { get; init; } = ["uicolor"];
 
     /// <inheritdoc/>
-    public string DisplayName { get; init; } = "UIColor";
+    public string DisplayName { get; init; } = "Font: Colors(UIColor)";
 
     /// <inheritdoc/>
     public bool Ready { get; set; }
@@ -171,38 +170,13 @@ internal class UiColorWidget : IDataWindowWidget
     {
         using var tooltip = ImRaii.Tooltip();
 
-        Span<byte> buf = stackalloc byte[256];
-        var ptr = 0;
-        ptr += Encoding.UTF8.GetBytes("<colortype(", buf[ptr..]);
-        id.TryFormat(buf[ptr..], out var bytesWritten);
-        ptr += bytesWritten;
-        ptr += Encoding.UTF8.GetBytes(")><edgecolortype(", buf[ptr..]);
-        (id + 1).TryFormat(buf[ptr..], out bytesWritten);
-        ptr += bytesWritten;
-        ptr += Encoding.UTF8.GetBytes(")>", buf[ptr..]);
-        DrawPreview(buf[..ptr], sheetColor, sheetColor2);
+        using (ImGui.PushTextColor(BinaryPrimitives.ReverseEndianness(sheetColor) | 0xFF000000u))
+        using (ImGui.PushTextEdge(BinaryPrimitives.ReverseEndianness(sheetColor2) | 0xFF000000u))
+            ImGui.Text($@"<colortype({id})><edgecolortype({id + 1})>");
 
-        ptr = 0;
-        ptr += Encoding.UTF8.GetBytes("<colortype(", buf[ptr..]);
-        (id + 1).TryFormat(buf[ptr..], out bytesWritten);
-        ptr += bytesWritten;
-        ptr += Encoding.UTF8.GetBytes(")><edgecolortype(", buf[ptr..]);
-        id.TryFormat(buf[ptr..], out bytesWritten);
-        ptr += bytesWritten;
-        ptr += Encoding.UTF8.GetBytes(")>", buf[ptr..]);
-        DrawPreview(buf[..ptr], sheetColor2, sheetColor);
-        return;
-
-        static void DrawPreview(ReadOnlySpan<byte> text, uint color, uint edgeColor) =>
-            ImGui.TextStyled(
-                text,
-                new()
-                {
-                    Color = BinaryPrimitives.ReverseEndianness(color) | 0xFF000000u,
-                    EdgeColor = BinaryPrimitives.ReverseEndianness(edgeColor) | 0xFF000000u,
-                    EdgeWidth = ImFontExtensions.DefaultEdgeWidth,
-                    SeStringMode = ImTextSeStringMode.Source,
-                });
+        using (ImGui.PushTextColor(BinaryPrimitives.ReverseEndianness(sheetColor2) | 0xFF000000u))
+        using (ImGui.PushTextEdge(BinaryPrimitives.ReverseEndianness(sheetColor) | 0xFF000000u))
+            ImGui.Text($@"<colortype({id + 1})><edgecolortype({id})>");
     }
 
     private bool DrawColorColumn(uint sheetColor)

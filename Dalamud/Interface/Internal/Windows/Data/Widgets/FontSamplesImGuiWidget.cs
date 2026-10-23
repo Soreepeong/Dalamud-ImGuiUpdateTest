@@ -8,24 +8,36 @@ using Dalamud.Interface.Utility.Raii;
 
 namespace Dalamud.Interface.Internal.Windows.Data.Widgets;
 
-/// <summary>Shows the fonts made from font specs (<see cref="FontResolver"/>).</summary>
-internal class FontSpecsWidget : IDataWindowWidget
+/// <summary>Shows samples of fonts drawn with ImGui.</summary>
+internal class FontSamplesImGuiWidget : IDataWindowWidget, ITextMarkupCallback
 {
     private const string CjkTestString = "C气氣J気K기";
+
+    private const uint LinkColor = 0xFFFFA64D;
+    private const uint HoverLinkColor = 0xFFFFC880;
+    private const uint ActiveLinkColor = 0xFF5050FF;
 
     private static readonly MultiFontSpec BoldItalicSample = FontSpec.From([
         ("Segoe UI", FontStyle.Bold | FontStyle.Italic),
         "Gulim",
     ]);
 
+    // Red to violet in ImGui's ABGR order, from the outermost band.
+    private static readonly uint[] RainbowColors =
+        [0xFF0000FF, 0xFF00A5FF, 0xFF00FFFF, 0xFF00FF00, 0xFFFF0000, 0xFF82004B, 0xFFEE82EE];
+
+    // Registered once, for as long as Dalamud runs.
+    private static ImTextDecorationId rainbowEdge;
+
     private float relativeSize = 1.5f;
     private float pixelSize = 24f;
+    private int labelClicks;
 
     /// <inheritdoc/>
     public string[]? CommandShortcuts { get; init; } = ["fontspecs"];
 
     /// <inheritdoc/>
-    public string DisplayName { get; init; } = "Font Specs";
+    public string DisplayName { get; init; } = "Font: Samples(ImGui)";
 
     /// <inheritdoc/>
     public bool Ready { get; set; }
@@ -36,8 +48,6 @@ internal class FontSpecsWidget : IDataWindowWidget
     /// <inheritdoc/>
     public void Draw()
     {
-        var resolver = Service<FontResolver>.Get();
-
         if (ImGui.CollapsingHeader("Samples"u8, ImGuiTreeNodeFlags.DefaultOpen))
         {
             Sample("Default"u8, FontSpec.Default, $"The quick brown fox jumps over the lazy dog. {CjkTestString}");
@@ -99,6 +109,52 @@ internal class FontSpecsWidget : IDataWindowWidget
                 ImGui.Text("PushStrikethrough"u8);
             using (ImGui.PushUnderline(0xFFFFFFFF))
                 ImGui.Text("PushUnderline"u8);
+            using (ImGui.PushBackground(0x804080FF))
+                ImGui.Text("PushBackground"u8);
+            using (ImGui.PushOverline())
+                ImGui.Text("PushOverline"u8);
+            using (ImGui.PushLines(ImTextLinePosition.Under, color: 0xFF40C0FF, count: 2))
+                ImGui.Text("Double underline"u8);
+            using (ImGui.PushLines(ImTextLinePosition.Under, ImTextLineStyle.Dotted))
+                ImGui.Text("Dotted underline"u8);
+            using (ImGui.PushLines(ImTextLinePosition.Under | ImTextLinePosition.Over, ImTextLineStyle.Dashed))
+                ImGui.Text("Dashed underline and overline"u8);
+            using (ImGui.PushLines(ImTextLinePosition.Under, ImTextLineStyle.Wavy, 0xFF4040FF))
+                ImGui.Text("Wavy underline"u8);
+            using (ImGui.PushLines(ImTextLinePosition.Through, ImTextLineStyle.Wavy, count: 3))
+                ImGui.Text("Three wavy strikethroughs"u8);
+            // The built-in decorations again as ExtraDecoration, on top of Lines and Background.
+            var wavy = new ImTextLineDecoration(ImTextLinePosition.Under, ImTextLineStyle.Wavy, 0xFF4040FF);
+            using (ImGui.PushUnderline())
+            using (ImGui.PushStrikethrough())
+            using (ImGui.PushDecoration(ImTextDecorationId.Line, wavy.Color, wavy.ToDecoration().Data))
+                ImGui.Text("Underline and strikethrough, and a wavy underline as ExtraDecoration"u8);
+            using (ImGui.PushTextStyle(
+                       ImGui.TextStyle with
+                       {
+                           Background = 0x804080FF,
+                           ExtraDecoration = new(ImTextDecorationId.Background, 0x40FFFFFF),
+                       }))
+            {
+                ImGui.Text("Background, and another over it as ExtraDecoration"u8);
+            }
+
+            ImGui.TextStyledRanges(
+                "Ranges: highlighted, then squiggled"u8,
+                [
+                    new(8, 11, ImGui.TextStyle with { Color = 0xFF40C0FF }),
+                    new(26, 9, ImGui.TextStyle with { ExtraDecoration = wavy }),
+                ]);
+            if (rainbowEdge.IsNone)
+            {
+                rainbowEdge = TextDecorationRegistry.Register(
+                    DrawRainbowEdge,
+                    TextDecorationFlags.BelowFill,
+                    RainbowColors.Length);
+            }
+
+            using (ImGui.PushDecoration(rainbowEdge))
+                ImGui.Text("Rainbow edge, a decoration drawing the glyphs 7 times under their fill"u8);
             using (ImGui.PushBold())
                 ImGui.Text($"PushBold {CjkTestString}");
             using (ImGui.PushItalic())
@@ -112,12 +168,28 @@ internal class FontSpecsWidget : IDataWindowWidget
             var seString =
                 "SeString: <colortype(500)>color<colortype(0)> <icon(56)> <italic(1)>italic<italic(0)> "u8 +
                 @"<edge(1)>edge<edge(0)> <link(0x0E,1,2,3,test)>a link<link(0xCE)> \#\#escaped"u8;
-            ImGui.MacroString(seString);
-            if (ImGui.TryGetSeStringInteraction(out var interaction, SeStringInteractionFlags.All))
+            ImGui.MacroString(seString, this);
+            if (ImGui.TryGetTextInteraction(out var interaction, TextInteractionFlags.All))
             {
+                if ((interaction.Flags & TextInteractionFlags.Hover) != 0)
+                    ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
                 ImGui.SameLine();
-                ImGui.Text(
-                    $"{interaction.Flags}: {Encoding.UTF8.GetString(seString.Slice(interaction.PayloadOffset, interaction.PayloadLength))}");
+                var link = seString.Slice(interaction.Offset, interaction.Length);
+                ImGui.Text($"{interaction.Flags}: {Encoding.UTF8.GetString(link)}");
+            }
+
+            // A label with an explicit ID shows "##" in its text as it is, instead of taking it as the ID.
+            using (ImGui.PushMacroString())
+            {
+                if (ImGui.Button(new("<colortype(500)>##<colortype(0)> in a macro string label"u8, "macroLabel"u8)))
+                    this.labelClicks++;
+                ImGui.SameLine();
+
+                // "###" keeps the ID as the text changes, so the node stays open.
+                using var node = ImRaii.TreeNode(
+                    new($"<italic(1)>##{this.labelClicks}<italic(0)> clicks", "###macroLabelNode"u8));
+                if (node)
+                    ImGui.Text("C# and #1 ## #2 show as they are."u8);
             }
 
             using (FontSpec.From("Comic Sans MS").Push(this.pixelSize))
@@ -128,41 +200,27 @@ internal class FontSpecsWidget : IDataWindowWidget
                 StyleSamples("AXIS Basic ProN: "u8);
         }
         while (false);
-
-        if (!ImGui.CollapsingHeader("Fonts"u8, ImGuiTreeNodeFlags.DefaultOpen))
-            return;
-
-        var entries = resolver.Snapshot();
-        ImGui.Text($"{entries.Length} fonts; frame {resolver.Frame}");
-        using var table = ImRaii.Table("##fonts"u8, 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.ScrollY);
-        if (!table)
-            return;
-
-        ImGui.TableSetupScrollFreeze(0, 1);
-        ImGui.TableSetupColumn("Spec"u8, ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("State"u8, ImGuiTableColumnFlags.WidthFixed);
-        ImGui.TableSetupColumn("ImFont*"u8, ImGuiTableColumnFlags.WidthFixed);
-        ImGui.TableSetupColumn("Held"u8, ImGuiTableColumnFlags.WidthFixed);
-        ImGui.TableSetupColumn("Unused for"u8, ImGuiTableColumnFlags.WidthFixed);
-        ImGui.TableSetupColumn("Follows default"u8, ImGuiTableColumnFlags.WidthFixed);
-        ImGui.TableHeadersRow();
-        foreach (var e in entries)
-        {
-            ImGui.TableNextRow();
-            ImGui.TableNextColumn();
-            ImGui.Text(e.Spec.ToString());
-            ImGui.TableNextColumn();
-            ImGui.Text(e.State);
-            ImGui.TableNextColumn();
-            ImGui.Text(e.Pointer == 0 ? "-" : $"{e.Pointer:X}");
-            ImGui.TableNextColumn();
-            ImGui.Text(e.Held ? "Yes" : "No");
-            ImGui.TableNextColumn();
-            ImGui.Text($"{e.FramesSinceUse} frames");
-            ImGui.TableNextColumn();
-            ImGui.Text(e.FollowsDefault ? "Yes" : "No");
-        }
     }
+
+    /// <inheritdoc/>
+    ImFontPtr ITextMarkupCallback.GetLinkFont(in TextLinkContext link, ImFontPtr font)
+    {
+        var style = font.Style;
+        style.Lines = new(ImTextLinePosition.Under);
+        style.Color = link.State switch
+        {
+            TextLinkState.Hovered => HoverLinkColor,
+            TextLinkState.Held => ActiveLinkColor,
+            _ => LinkColor,
+        };
+        if (link.Held && ImGui.IsMouseDown(ImGuiMouseButton.Right))
+            style.Background = ImGui.GetColorU32(ImGuiCol.TextSelectedBg);
+        return font.WithStyleForFrame(style);
+    }
+
+    // A band of the rainbow, a pixel narrower than the one before.
+    private static void DrawRainbowEdge(in TextDecorationSpan span) =>
+        span.DrawGlyphs(RainbowColors[span.Band], RainbowColors.Length - span.Band);
 
     private static void StyleSamples(ReadOnlySpan<byte> label)
     {

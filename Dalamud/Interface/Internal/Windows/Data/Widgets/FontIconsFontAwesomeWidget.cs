@@ -18,7 +18,7 @@ namespace Dalamud.Interface.Internal.Windows.Data.Widgets;
 /// <summary>
 /// Widget to display FontAwesome Symbols.
 /// </summary>
-internal class FontAwesomeTestWidget : IDataWindowWidget
+internal class FontIconsFontAwesomeWidget : IDataWindowWidget
 {
     private static readonly string[] First = ["(Show All)", "(Undefined)"];
 
@@ -34,7 +34,7 @@ internal class FontAwesomeTestWidget : IDataWindowWidget
     public string[]? CommandShortcuts { get; init; } = ["fa", "fatest", "fontawesome"];
 
     /// <inheritdoc/>
-    public string DisplayName { get; init; } = "Font Awesome Test";
+    public string DisplayName { get; init; } = "Font: Icons(FontAwesomeIcon)";
 
     /// <inheritdoc/>
     public bool Ready { get; set; }
