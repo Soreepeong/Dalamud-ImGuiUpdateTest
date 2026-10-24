@@ -2630,11 +2630,80 @@ ImGuiID ImHashData(const void* data_p, size_t data_size, ImGuiID seed)
 #endif
 }
 
+// BEGIN DALAMUD CUSTOM [LABEL]
+// - "text##id\x1F##": "text" is displayed, and "text##id" is hashed, like "text##id".
+// - "text##id\x1F###": "text" is displayed, and "id" is hashed, as with "text###id".
+// - "te##xt##id\x1F##": "te##xt" is displayed, and "te##xt##id" is hashed.
+// - "te##xt##id\x1F###": "te##xt" is displayed, and "id" is hashed.
+// - "te###xt##id\x1F###": "te##xt#" is displayed, and "id" is hashed.
+// - Without a separator, "text\x1F##" displays and hashes "text", and "id\x1F###" displays nothing and hashes "id".
+// - Without "\x1F##" or "\x1F###" suffix, standard ImGui rules apply.
+static bool ImParseLabelSuffix(const char* text, const char* text_end, const char** out_display_end, const char** out_id_begin, const char** out_id_end)
+{
+    const ptrdiff_t len = text_end - text;
+    if (len < 3 || text_end[-1] != '#' || text_end[-2] != '#')
+        return false;
+    bool id_only;
+    if (text_end[-3] == '\x1F')
+        id_only = false;
+    else if (len >= 4 && text_end[-3] == '#' && text_end[-4] == '\x1F')
+        id_only = true;
+    else
+        return false;
+
+    const char* rest_end = text_end - (id_only ? 4 : 3);
+    const char* separator = NULL;
+    for (ptrdiff_t i = (rest_end - text) - 2; i >= 0; i--)
+    {
+        if (text[i] == '#' && text[i + 1] == '#')
+        {
+            separator = text + i;
+            break;
+        }
+    }
+
+    *out_id_end = rest_end;
+    if (id_only)
+    {
+        *out_display_end = separator ? separator : text;
+        *out_id_begin = separator ? separator + 2 : text;
+    }
+    else
+    {
+        *out_display_end = separator ? separator : rest_end;
+        *out_id_begin = text;
+    }
+    return true;
+}
+
+static bool ImIsLabelDisplayEnd(const char* p)
+{
+    if (p[0] != '#' || p[1] != '#')
+        return false;
+    for (p += 2; *p != '\0'; p++)
+    {
+        if (p[0] == '\x1F' && p[1] == '#' && p[2] == '#' && (p[3] == '\0' || (p[3] == '#' && p[4] == '\0')))
+            return true;
+        if (p[0] == '#' && p[1] == '#')
+            return false;
+    }
+    return false;
+}
+// END DALAMUD CUSTOM [LABEL]
+
 // Zero-terminated string hash, with support for ### to reset back to seed value.
 // e.g. "label###id" outputs the same hash as "id" (and "label" is generally displayed by the UI functions)
 // FIXME-OPT: Replace with e.g. FNV1a hash? CRC32 pretty much randomly access 1KB. Need to do proper measurements.
 ImGuiID ImHashStr(const char* data_p, size_t data_size, ImGuiID seed)
 {
+    // BEGIN DALAMUD CUSTOM [LABEL]
+    const char* display_end;
+    const char* id_begin;
+    const char* id_end;
+    if (data_size != 0 && ImParseLabelSuffix(data_p, data_p + data_size, &display_end, &id_begin, &id_end))
+        return ImHashData(id_begin, (size_t)(id_end - id_begin), seed);
+    const ImGuiID original_seed = seed;
+    // END DALAMUD CUSTOM [LABEL]
     seed = ~seed;
     ImU32 crc = seed;
     const unsigned char* data = (const unsigned char*)data_p;
@@ -2676,6 +2745,10 @@ ImGuiID ImHashStr(const char* data_p, size_t data_size, ImGuiID seed)
             crc = _mm_crc32_u8(crc, c);
 #endif
         }
+        // BEGIN DALAMUD CUSTOM [LABEL]
+        if (ImParseLabelSuffix(data_p, (const char*)data - 1, &display_end, &id_begin, &id_end))
+            return ImHashData(id_begin, (size_t)(id_end - id_begin), original_seed);
+        // END DALAMUD CUSTOM [LABEL]
     }
     return ~crc;
 }
@@ -2684,6 +2757,13 @@ ImGuiID ImHashStr(const char* data_p, size_t data_size, ImGuiID seed)
 // FIXME-OPT: This is not designed to be optimal. Use with care.
 const char* ImHashSkipUncontributingPrefix(const char* label)
 {
+    // BEGIN DALAMUD CUSTOM [LABEL]
+    const char* display_end;
+    const char* id_begin;
+    const char* id_end;
+    if (ImParseLabelSuffix(label, label + ImStrlen(label), &display_end, &id_begin, &id_end))
+        return id_begin;
+    // END DALAMUD CUSTOM [LABEL]
     const char* result = label;
     while (unsigned char c = *label++)
         if (c == '#' && label[0] == '#' && label[1] == '#')
@@ -4055,6 +4135,20 @@ const char* ImGui::FindRenderedTextEnd(const char* text, const char* text_end)
 
     while (text_display_end < text_end && *text_display_end != '\0' && (text_display_end[0] != '#' || text_display_end[1] != '#'))
         text_display_end++;
+    // BEGIN DALAMUD CUSTOM [LABEL]
+    if (text_display_end < text_end && *text_display_end != '\0')
+    {
+        if (text_end == (const char*)-1)
+            text_end = text_display_end + ImStrlen(text_display_end);
+        else if (ImIsLabelDisplayEnd(text_end))
+            return text_end;
+        const char* display_end;
+        const char* id_begin;
+        const char* id_end;
+        if (ImParseLabelSuffix(text, text_end, &display_end, &id_begin, &id_end))
+            return display_end;
+    }
+    // END DALAMUD CUSTOM [LABEL]
     return text_display_end;
 }
 
