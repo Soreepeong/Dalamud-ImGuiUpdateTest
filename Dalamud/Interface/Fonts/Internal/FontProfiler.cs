@@ -34,6 +34,16 @@ internal static class FontProfiler
         /// <summary>Drawing layouts into draw lists, including rasterizing the glyphs they need.</summary>
         Render,
 
+        /// <summary>Within <see cref="Render"/>, the render hook, resolving styles and finding the items in view.
+        /// </summary>
+        RenderSetup,
+
+        /// <summary>Within <see cref="Render"/>, getting the glyph images from the fonts.</summary>
+        RenderImages,
+
+        /// <summary>Within <see cref="Render"/>, drawing decorations.</summary>
+        RenderDecorations,
+
         /// <summary>Making layouts that were not cached, of plain text or SeStrings.</summary>
         Layout,
 
@@ -81,7 +91,7 @@ internal static class FontProfiler
     /// <summary>Ends a section.</summary>
     /// <param name="section">The section.</param>
     /// <param name="start">What <see cref="Begin"/> returned.</param>
-    /// <param name="bytes">Bytes processed, if any.</param>
+    /// <param name="bytes">What was processed, if any, in the unit of <see cref="Stat.Bytes"/>.</param>
     /// <param name="calls">The number of calls it counts as, such as glyphs rasterized together.</param>
     public static void End(Section section, long start, long bytes = 0, long calls = 1)
     {
@@ -184,7 +194,8 @@ internal static class FontProfiler
         /// <summary>The number of calls, such as glyphs rasterized.</summary>
         public long Calls;
 
-        /// <summary>Bytes processed.</summary>
+        /// <summary>What was processed. Bytes of text or uploaded, codepoints shaped, or quads drawn for
+        /// <see cref="Section.Render"/>.</summary>
         public long Bytes;
     }
 }

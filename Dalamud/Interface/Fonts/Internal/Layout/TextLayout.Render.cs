@@ -82,6 +82,7 @@ internal sealed unsafe partial class TextLayout
         ImTextTransform? transform = null)
     {
         var start = FontProfiler.Begin(FontProfiler.Section.Render);
+        var verticesBefore = drawList.VtxBuffer.Size;
         if (textEnd < 0)
             textEnd = int.MaxValue;
         var snap = transform is null && (flags & ImTextRenderFlags.NoPixelSnap) == 0;
@@ -93,6 +94,7 @@ internal sealed unsafe partial class TextLayout
         var dl = drawList.Handle;
 
         // Runs with some user data may be drawn with another style, such as a hovered link.
+        var setupStart = FontProfiler.Begin(FontProfiler.Section.RenderSetup);
         if (transform is not null || this.RenderHook is not { } hook ||
             !hook.BeginRender(this, drawList, pos, out var highlightUserData, out var highlightStyle))
         {
@@ -110,6 +112,7 @@ internal sealed unsafe partial class TextLayout
         (this.renderTextBegin, this.renderTextEnd, this.renderSnap, this.renderClip) =
             (textBegin, textEnd, snap, glyphClip);
         this.ValidateImageCache(snap);
+        FontProfiler.End(FontProfiler.Section.RenderSetup, setupStart);
 
         this.DrawDecorationLayer(dl, pos, col, styles, transform, layers, TextDecorationLayer.BelowText);
         if ((flags & ImTextRenderFlags.CompleteGlyphs) != 0)
@@ -141,7 +144,7 @@ internal sealed unsafe partial class TextLayout
         this.DrawDecorationLayer(dl, pos, col, styles, transform, layers, TextDecorationLayer.OverText);
         if (rentedStyles is not null)
             ArrayPool<ImTextStyle>.Shared.Return(rentedStyles);
-        FontProfiler.End(FontProfiler.Section.Render, start);
+        FontProfiler.End(FontProfiler.Section.Render, start, (drawList.VtxBuffer.Size - verticesBefore) / 4);
     }
 
     /// <summary>Draws the glyphs of a span of a decoration being drawn.</summary>
@@ -577,6 +580,7 @@ internal sealed unsafe partial class TextLayout
     private void GetGlyphImages(
         ManagedFont font, float size, float density, bool snap, GlyphLookup lookup, int count, bool keep)
     {
+        var start = FontProfiler.Begin(FontProfiler.Section.RenderImages);
         font.GetGlyphImages(
             lookup.Ids.AsSpan(0, count),
             lookup.Steps.AsSpan(0, count),
@@ -585,6 +589,7 @@ internal sealed unsafe partial class TextLayout
             0,
             snap,
             lookup.Images.AsSpan(0, count));
+        FontProfiler.End(FontProfiler.Section.RenderImages, start, calls: count);
         if (!keep)
             return;
 
@@ -642,7 +647,9 @@ internal sealed unsafe partial class TextLayout
     {
         if ((layers & LayerFlag(layer)) == 0)
             return;
+        var start = FontProfiler.Begin(FontProfiler.Section.RenderDecorations);
         this.DrawDecorations(dl, pos, col, styles, transform, layer);
+        FontProfiler.End(FontProfiler.Section.RenderDecorations, start);
     }
 
     // Decorations of a layer, one span per adjacent items on a line with the same decoration and text color, so that

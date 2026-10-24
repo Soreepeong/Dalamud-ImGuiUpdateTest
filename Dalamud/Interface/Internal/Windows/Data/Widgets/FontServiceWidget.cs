@@ -92,6 +92,9 @@ internal class FontServiceWidget : IDataWindowWidget
                 section switch
                 {
                     FontProfiler.Section.Render => "Drawing text",
+                    FontProfiler.Section.RenderSetup => "- Setup",
+                    FontProfiler.Section.RenderImages => "- Glyph images",
+                    FontProfiler.Section.RenderDecorations => "- Decorations",
                     FontProfiler.Section.Layout => "Making layouts",
                     FontProfiler.Section.Rasterize => "Rasterizing",
                     FontProfiler.Section.Deferred => "Deferred",
@@ -116,7 +119,8 @@ internal class FontServiceWidget : IDataWindowWidget
             var text = $"{FontProfiler.ToMs(s.Ticks):0.000}ms, {s.Calls} ";
             return section switch
             {
-                FontProfiler.Section.Render => text + "calls",
+                FontProfiler.Section.Render => text + $"calls, {s.Bytes} quads",
+                FontProfiler.Section.RenderSetup or FontProfiler.Section.RenderDecorations => text + "calls",
                 FontProfiler.Section.Layout => text + $"layouts, {s.Bytes / 1024f:0.#} KiB",
                 FontProfiler.Section.LayoutAnalyze => text + $"layouts, {s.Bytes} bytes",
                 FontProfiler.Section.LayoutShape or FontProfiler.Section.LayoutShapeByFonts or
