@@ -211,10 +211,26 @@
         <Exec Command="echo|set /P =&quot;$(SCMVersion)&quot; &gt; $(TempVerFile)" IgnoreExitCode="true" />
     </Target>
 
-    <Target Name="GenerateStubVersionData" BeforeTargets="WriteVersionData" Condition="'$(SCMVersion)'=='' And '$(Configuration)'!='Release'">
+    <!-- depends on what sets the properties and items below. SourceLink hooks itself in with BeforeTargets, so it is named separately. -->
+    <Target Name="CollectLocalBuildInputs" DependsOnTargets="$(CoreCompileDependsOn);GenerateSourceLinkFile">
+        <PropertyGroup>
+            <LocalBuildTimeFile>$(IntermediateOutputPath)LocalBuildTime.txt</LocalBuildTimeFile>
+        </PropertyGroup>
+        <!-- the Inputs of CoreCompile in Microsoft.CSharp.Core.targets -->
+        <ItemGroup>
+            <LocalBuildInput Include="$(MSBuildAllProjects);@(Compile);@(_CoreCompileResourceInputs);$(ApplicationIcon);$(KeyOriginatorFile);@(ReferencePathWithRefAssemblies);@(CompiledLicenseFile);@(LinkResource);@(EmbeddedDocumentation);$(Win32Resource);$(Win32Manifest);@(CustomAdditionalCompileInputs);$(ResolvedCodeAnalysisRuleSet);@(AdditionalFiles);@(EmbeddedFiles);@(Analyzer);@(EditorConfigFiles);$(SourceLink)" Exclude="$(IntermediateOutputPath)CustomAssemblyInfo.cs" />
+        </ItemGroup>
+    </Target>
+
+    <!-- records the build time only when an input changed, so that an unchanged project is not recompiled. -->
+    <Target Name="StampLocalBuildTime" DependsOnTargets="CollectLocalBuildInputs" Inputs="@(LocalBuildInput)" Outputs="$(LocalBuildTimeFile)">
+        <WriteLinesToFile File="$(LocalBuildTimeFile)" Lines="$([System.DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss'))" Overwrite="true" />
+    </Target>
+
+    <Target Name="GenerateStubVersionData" BeforeTargets="WriteVersionData" DependsOnTargets="StampLocalBuildTime" Condition="'$(SCMVersion)'=='' And '$(Configuration)'!='Release'">
         <!-- stub out version since it takes a while. -->
         <PropertyGroup>
-            <SCMVersion>Local build at $([System.DateTime]::Now.ToString(yyyy-MM-dd HH:mm:ss))</SCMVersion>
+            <SCMVersion>Local build at $([System.IO.File]::ReadAllText('$(LocalBuildTimeFile)').Trim())</SCMVersion>
             <Branch>???</Branch>
             <CommitHashClientStructs>???</CommitHashClientStructs>
         </PropertyGroup>
@@ -229,30 +245,16 @@
         <ItemGroup>
             <Compile Include="$(CustomAssemblyInfoFile)" />
         </ItemGroup>
-        <!-- defines the AssemblyMetadata attribute that will be written -->
+        <!-- defines the AssemblyMetadata attributes that will be written -->
         <ItemGroup>
-            <AssemblyAttributes Include="AssemblyMetadata" Condition="'$(SCMVersion)' != ''">
-                <_Parameter1>SCMVersion</_Parameter1>
-                <_Parameter2>$(SCMVersion)</_Parameter2>
-            </AssemblyAttributes>
-            <AssemblyAttributes Include="AssemblyMetadata" Condition="'$(CommitCount)' != ''">
-                <_Parameter1>GitCommitCount</_Parameter1>
-                <_Parameter2>$(CommitCount)</_Parameter2>
-            </AssemblyAttributes>
-            <AssemblyAttributes Include="AssemblyMetadata" Condition="'$(Branch)' != ''">
-                <_Parameter1>GitBranch</_Parameter1>
-                <_Parameter2>$(Branch)</_Parameter2>
-            </AssemblyAttributes>
-            <AssemblyAttributes Include="AssemblyMetadata" Condition="'$(CommitHashClientStructs)' != ''">
-                <_Parameter1>GitHashClientStructs</_Parameter1>
-                <_Parameter2>$(CommitHashClientStructs)</_Parameter2>
-            </AssemblyAttributes>
-            <AssemblyAttributes Include="AssemblyMetadata" Condition="'$(CommitHash)' != ''">
-                <_Parameter1>GitHash</_Parameter1>
-                <_Parameter2>$(CommitHash)</_Parameter2>
-            </AssemblyAttributes>
+            <VersionMetadata Include="SCMVersion" Value="$(SCMVersion)" Condition="'$(SCMVersion)' != ''" />
+            <VersionMetadata Include="GitCommitCount" Value="$(CommitCount)" Condition="'$(CommitCount)' != ''" />
+            <VersionMetadata Include="GitBranch" Value="$(Branch)" Condition="'$(Branch)' != ''" />
+            <VersionMetadata Include="GitHashClientStructs" Value="$(CommitHashClientStructs)" Condition="'$(CommitHashClientStructs)' != ''" />
+            <VersionMetadata Include="GitHash" Value="$(CommitHash)" Condition="'$(CommitHash)' != ''" />
+            <VersionMetadataLine Include="[assembly: System.Reflection.AssemblyMetadata(&quot;%(VersionMetadata.Identity)&quot;, &quot;%(VersionMetadata.Value)&quot;)]" />
         </ItemGroup>
-        <!-- writes the attribute to the customAssemblyInfo file -->
-        <WriteCodeFragment Language="C#" OutputFile="$(CustomAssemblyInfoFile)" AssemblyAttributes="@(AssemblyAttributes)" />
+        <!-- writes the attributes to the CustomAssemblyInfo file, only if they changed, so that CoreCompile can be skipped -->
+        <WriteLinesToFile File="$(CustomAssemblyInfoFile)" Lines="@(VersionMetadataLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     </Target>
 </Project>
