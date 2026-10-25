@@ -225,9 +225,9 @@ internal class ConsoleWindow : Window, IDisposable
                 }
 
                 ImGui.Selectable(
-                    "###console_null"u8,
+                    $"###console_null{i}",
                     true,
-                    ImGuiSelectableFlags.AllowItemOverlap | ImGuiSelectableFlags.SpanAllColumns);
+                    ImGuiSelectableFlags.AllowOverlap | ImGuiSelectableFlags.SpanAllColumns);
 
                 // This must be after ImGui.Selectable, it uses ImGui.IsItem... functions
                 this.HandleCopyMode(i, line);

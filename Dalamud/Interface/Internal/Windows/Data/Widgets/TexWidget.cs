@@ -366,7 +366,13 @@ internal class TexWidget : IDataWindowWidget
                         if (this.inputTexScale != Vector2.Zero)
                             scale *= this.inputTexScale;
 
-                        ImGui.Image(tex.Handle, scale, this.inputTexUv0, this.inputTexUv1, this.inputTintCol);
+                        ImGui.ImageWithBg(
+                            tex.Handle,
+                            scale,
+                            this.inputTexUv0,
+                            this.inputTexUv1,
+                            Vector4.Zero,
+                            this.inputTintCol);
                     }
                     else
                     {

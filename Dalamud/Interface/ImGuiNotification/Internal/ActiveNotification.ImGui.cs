@@ -325,8 +325,8 @@ internal sealed partial class ActiveNotification
             windowPos + windowSize,
             ImGui.GetColorU32(NotificationConstants.FocusBorderColor * new Vector4(1f, 1f, 1f, ImGui.GetStyle().Alpha)),
             0f,
-            ImDrawFlags.None,
-            NotificationConstants.FocusIndicatorThickness);
+            NotificationConstants.FocusIndicatorThickness,
+            ImDrawFlags.None);
         ImGui.PopClipRect();
     }
 

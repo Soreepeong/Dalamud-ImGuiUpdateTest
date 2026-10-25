@@ -92,8 +92,8 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
         this.interfaceManager = imws.Manager;
         this.setPlatformImeDataDelegate = this.ImGuiSetPlatformImeData;
 
-        var io = ImGui.GetIO();
-        io.SetPlatformImeDataFn = Marshal.GetFunctionPointerForDelegate(this.setPlatformImeDataDelegate).ToPointer();
+        var pio = ImGui.GetPlatformIO();
+        pio.PlatformSetImeDataFn = Marshal.GetFunctionPointerForDelegate(this.setPlatformImeDataDelegate).ToPointer();
         this.interfaceManager.Draw += this.Draw;
         this.wndProcHookManager.PreWndProc += this.WndProcHookManagerOnPreWndProc;
     }
@@ -103,7 +103,8 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
     /// </summary>
     ~DalamudIme() => this.ReleaseUnmanagedResources();
 
-    private delegate void ImGuiSetPlatformImeDataDelegate(ImGuiViewportPtr viewport, ImGuiPlatformImeDataPtr data);
+    private delegate void ImGuiSetPlatformImeDataDelegate(
+        ImGuiContextPtr ctx, ImGuiViewportPtr viewport, ImGuiPlatformImeDataPtr data);
 
     /// <summary>
     /// Gets a value indicating whether to display the cursor in input text. This also deals with blinking.
@@ -195,8 +196,8 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
     {
         if (ImGuiHelpers.IsImGuiInitialized)
         {
-            var io = ImGui.GetIO();
-            io.SetPlatformImeDataFn = null;
+            var pio = ImGui.GetPlatformIO();
+            pio.PlatformSetImeDataFn = null;
         }
     }
 
@@ -478,11 +479,11 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
         }
 
         textState.SanitizeSelectionRange();
-        if (textState.ReplaceSelectionAndPushUndo(newString))
+        if (textState.ReplaceSelectionAndPushUndo(newString, out var insertedLength))
             this.temporaryUndoSelection = textState.GetSelectionTuple();
 
         // Put the cursor at the beginning, so that the candidate window appears aligned with the text.
-        textState.SetSelectionRange(textState.GetSelectionTuple().Start, newString.Length, 0);
+        textState.SetSelectionRange(textState.GetSelectionTuple().Start, insertedLength, 0);
 
         if (finalCommit)
         {
@@ -571,7 +572,7 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
         }
     }
 
-    private void ImGuiSetPlatformImeData(ImGuiViewportPtr viewport, ImGuiPlatformImeDataPtr data)
+    private void ImGuiSetPlatformImeData(ImGuiContextPtr ctx, ImGuiViewportPtr viewport, ImGuiPlatformImeDataPtr data)
     {
         this.cursorScreenPos = data.InputPos;
         this.associatedViewport = data.WantVisible ? viewport : default;
@@ -593,6 +594,7 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
         var drawConv = drawCand || ime.ShowPartialConversion;
         var drawIme = ime.inputModeIcon != 0;
         var imeIconFont = InterfaceManager.DefaultFont;
+        var imeIconFontSize = ImGui.GetFontSize();
 
         var pad = ImGui.GetStyle().WindowPadding;
         var candTextSize = ImGui.CalcTextSize(ime.compositionString == string.Empty ? " " : ime.compositionString);
@@ -697,7 +699,7 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
                         {
                             imeIconFont.RenderChar(
                                 drawList,
-                                imeIconFont.FontSize,
+                                imeIconFontSize,
                                 cursor + new Vector2(dx, dy),
                                 stateBg,
                                 ime.inputModeIcon);
@@ -710,7 +712,7 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
             {
                 imeIconFont.RenderChar(
                     drawList,
-                    imeIconFont.FontSize,
+                    imeIconFontSize,
                     cursor,
                     stateFg,
                     ime.inputModeIcon);
@@ -736,7 +738,7 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
                 var selected = i == (native.dwSelection % ImePageSize);
                 var color = ImGui.GetColorU32(ImGuiCol.Text);
                 if (selected)
-                    color = ImGui.GetColorU32(ImGuiCol.NavHighlight);
+                    color = ImGui.GetColorU32(ImGuiCol.NavCursor);
 
                 var s = $"{i + 1}. {ime.candidateStrings[i].String}";
                 drawList.AddText(cursor, color, s);
@@ -779,7 +781,7 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
                         {
                             imeIconFont.RenderChar(
                                 drawList,
-                                imeIconFont.FontSize,
+                                imeIconFontSize,
                                 cursor + new Vector2(dx, dy),
                                 ImGui.GetColorU32(ImGuiCol.WindowBg),
                                 ime.inputModeIcon);
@@ -792,7 +794,7 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
             {
                 imeIconFont.RenderChar(
                     drawList,
-                    imeIconFont.FontSize,
+                    imeIconFontSize,
                     cursor,
                     ImGui.GetColorU32(ImGuiCol.Text),
                     ime.inputModeIcon);

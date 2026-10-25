@@ -160,7 +160,7 @@ internal class TitleScreenMenuWindow : Window, IDisposable
         if (!this.AllowDrawing || !this.showTsm.Value)
             return;
 
-        var scale = ImGui.GetIO().FontGlobalScale;
+        var scale = ImGui.GetStyle().FontScaleMain;
         var entries = this.titleScreenMenu.PluginEntries;
 
         var hovered = ImGui.IsWindowHovered(
@@ -328,6 +328,8 @@ internal class TitleScreenMenuWindow : Window, IDisposable
                 break;
             }
         }
+
+        ImGui.Dummy(Vector2.Zero);
     }
 
     private bool DrawEntry(
@@ -335,7 +337,7 @@ internal class TitleScreenMenuWindow : Window, IDisposable
     {
         using var fontScopeDispose = this.myFontHandle.Value.Push();
 
-        var scale = ImGui.GetIO().FontGlobalScale;
+        var scale = ImGui.GetStyle().FontScaleMain;
 
         if (!this.shadeEasings.TryGetValue(entry.Id, out var shadeEasing))
         {
@@ -443,6 +445,7 @@ internal class TitleScreenMenuWindow : Window, IDisposable
 
         initialCursor.Y += dalamudTextureWrap.Height * scale;
         ImGui.SetCursorPos(initialCursor);
+        ImGui.Dummy(Vector2.Zero);
 
         return isHover;
     }

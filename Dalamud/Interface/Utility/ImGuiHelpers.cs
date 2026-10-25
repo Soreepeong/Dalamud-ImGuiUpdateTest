@@ -31,7 +31,7 @@ public static class ImGuiHelpers
     /// Gets the global Dalamud scale.
     /// </summary>
     public static float GlobalScale =>
-        IsImGuiInitialized ? ImGui.GetIO().FontGlobalScale : Service<DalamudConfiguration>.Get().GlobalUiScale;
+        IsImGuiInitialized ? ImGui.GetStyle().FontScaleMain : Service<DalamudConfiguration>.Get().GlobalUiScale;
 
     /// <summary>
     /// Gets a value indicating whether ImGui is initialized and ready for use.<br />

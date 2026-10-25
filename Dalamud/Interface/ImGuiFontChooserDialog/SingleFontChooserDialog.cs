@@ -704,7 +704,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                     if (ImGui.Selectable(
                             this.ExtractName(families[i]),
                             ref selected,
-                            ImGuiSelectableFlags.DontClosePopups))
+                            ImGuiSelectableFlags.NoAutoClosePopups))
                     {
                         this.selectedFamilyIndex = families.IndexOf(families[i]);
                         this.familySearch = this.ExtractName(families[i]);
@@ -871,7 +871,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                     if (ImGui.Selectable(
                             this.ExtractName(fonts[i]),
                             ref selected,
-                            ImGuiSelectableFlags.DontClosePopups))
+                            ImGuiSelectableFlags.NoAutoClosePopups))
                     {
                         this.selectedFontIndex = fonts.IndexOf(fonts[i]);
                         this.fontSearch = this.ExtractName(fonts[i]);
@@ -989,7 +989,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                     if (ImGui.Selectable(
                             FontSizeList[i].Name,
                             ref selected,
-                            ImGuiSelectableFlags.DontClosePopups))
+                            ImGuiSelectableFlags.NoAutoClosePopups))
                     {
                         this.selectedFont = this.selectedFont with { SizePt = FontSizeList[i].Value };
                         this.setFocusOn = 2;

@@ -1,15 +1,12 @@
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Dalamud.Bindings.ImGui;
-using Dalamud.Game;
-using Dalamud.Interface.ImGuiBackend.Helpers;
 using Dalamud.Interface.ImGuiBackend.Helpers.D3D11;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Textures.TextureWraps;
@@ -34,7 +31,7 @@ namespace Dalamud.Interface.ImGuiBackend.Renderers;
     Justification = "Multiple fixed/using scopes")]
 internal unsafe partial class Dx11Renderer : IImGuiRenderer
 {
-    private readonly List<IDalamudTextureWrap> fontTextures = [];
+    private readonly Dictionary<nint, IDalamudTextureWrap> imguiTextures = [];
     private readonly D3D_FEATURE_LEVEL featureLevel;
     private readonly ViewportHandler viewportHandler;
     private readonly nint renderNamePtr;
@@ -105,7 +102,10 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
             this.context = new(context);
             this.featureLevel = device->GetFeatureLevel();
 
-            io.BackendFlags |= ImGuiBackendFlags.RendererHasVtxOffset | ImGuiBackendFlags.RendererHasViewports;
+            io.BackendFlags |= ImGuiBackendFlags.RendererHasVtxOffset | ImGuiBackendFlags.RendererHasViewports |
+                               ImGuiBackendFlags.RendererHasTextures;
+            ImGui.GetPlatformIO().Handle->RendererTextureMaxWidth = D3D11.D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+            ImGui.GetPlatformIO().Handle->RendererTextureMaxHeight = D3D11.D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
 
             this.renderNamePtr = Marshal.StringToHGlobalAnsi("imgui_impl_dx11_c#");
             io.Handle->BackendRendererName = (byte*)this.renderNamePtr;
@@ -129,6 +129,11 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
             this.mainViewport = ViewportData.Create(this, swapChain, null, null);
             var vp = ImGui.GetPlatformIO().Viewports[0];
             vp.RendererUserData = this.mainViewport.Handle;
+
+            // Off-frame draw data can use the shape texture before the first frame lists it for upload.
+            var shapeTexture = ImGui.GetShapeTexture();
+            if (!shapeTexture.IsNull && shapeTexture.Status == ImTextureStatus.WantCreate)
+                this.UpdateTexture(shapeTexture);
         }
         catch
         {
@@ -164,18 +169,6 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
     /// <inheritdoc/>
     public void RenderDrawData(ImDrawDataPtr drawData) =>
         this.mainViewport.Draw(drawData, this.mainViewport.SwapChain == null);
-
-    /// <summary>
-    /// Rebuilds font texture.
-    /// </summary>
-    public void RebuildFontTexture()
-    {
-        foreach (var fontResourceView in this.fontTextures)
-            fontResourceView.Dispose();
-        this.fontTextures.Clear();
-
-        this.CreateFontsTexture();
-    }
 
     /// <inheritdoc/>
     public IDalamudTextureWrap CreateTexture2D(
@@ -259,6 +252,17 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
         if (drawData.DisplaySize.X <= 0 || drawData.DisplaySize.Y <= 0)
             return;
 
+        // Most of the time the list has one element that is OK, so there is nothing to do.
+        // It is part of ImDrawData so that a draw data can override or disable texture updates.
+        if (drawData.Handle->Textures is not null)
+        {
+            foreach (var tex in *drawData.Handle->Textures)
+            {
+                if (tex.Status != ImTextureStatus.Ok)
+                    this.UpdateTexture(tex);
+            }
+        }
+
         // Set up render target
         this.context.Get()->OMSetRenderTargets(1, &renderTargetView, null);
         if (clearRenderTarget)
@@ -268,7 +272,7 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
         }
 
         // Stop if there's nothing to draw
-        var cmdLists = new Span<ImDrawListPtr>(drawData.Handle->CmdLists, drawData.Handle->CmdListsCount);
+        var cmdLists = drawData.Handle->CmdLists.AsSpan();
         if (cmdLists.IsEmpty)
             return;
 
@@ -389,7 +393,9 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
                         this.context.Get()->RSSetScissorRects(1, &clipRect);
 
                         // Bind texture and draw
-                        var srv = (ID3D11ShaderResourceView*)cmd.TextureId.Handle;
+                        // Same as ImDrawCmd::GetTexID, without a P/Invoke per command.
+                        var texId = cmd.TexRef.TexData is not null ? cmd.TexRef.TexData->TexID : cmd.TexRef.TexID;
+                        var srv = (ID3D11ShaderResourceView*)texId.Handle;
                         this.context.Get()->PSSetShaderResources(0, 1, &srv);
                         this.context.Get()->DrawIndexed(
                             cmd.ElemCount,
@@ -728,51 +734,70 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
                 (ID3D11Resource*)this.blurEighthTexture.Get(), null, pp).ThrowOnError();
     }
 
-    /// <summary>
-    /// Builds fonts as necessary, and uploads the built data onto the GPU.<br />
-    /// No-op if it has already been done.
-    /// </summary>
-    private void CreateFontsTexture()
+    /// <summary>Creates, updates, or destroys a texture as requested by ImGui.</summary>
+    /// <param name="tex">The texture.</param>
+    private void UpdateTexture(ImTextureDataPtr tex)
     {
         ObjectDisposedException.ThrowIf(this.device.IsEmpty(), this);
 
-        if (this.fontTextures.Count != 0)
-            return;
-
-        if (Service<Framework>.GetNullable() is not { IsFrameworkUnloading: false })
-            return;
-
-        var io = ImGui.GetIO();
-        if (io.Fonts.Textures.Size == 0)
-            io.Fonts.Build();
-
-        for (int textureIndex = 0, textureCount = io.Fonts.Textures.Size;
-             textureIndex < textureCount;
-             textureIndex++)
+        if (tex.Status == ImTextureStatus.WantCreate)
         {
-            int width = 0, height = 0, bytespp = 0;
-            byte* fontPixels = null;
+            // The shape texture and the textures of ImGui users are RGBA32.
+            if (tex.Format != ImTextureFormat.Rgba32)
+                throw new NotSupportedException($"{tex.Format} is not supported.");
 
-            // Build texture atlas
-            io.Fonts.GetTexDataAsRGBA32(
-                textureIndex,
-                &fontPixels,
-                ref width,
-                ref height,
-                ref bytespp);
+            var wrap = this.CreateTexture2D(
+                new(tex.Handle->Pixels, tex.Width * tex.Height * 4),
+                new(tex.Width, tex.Height, (int)DXGI_FORMAT.DXGI_FORMAT_R8G8B8A8_UNORM, tex.Width * 4),
+                false,
+                false,
+                false,
+                $"ImGuiTexture#{(nint)tex.Handle:X}");
+            if (this.imguiTextures.Remove((nint)tex.Handle, out var oldWrap))
+                oldWrap.Dispose();
+            this.imguiTextures[(nint)tex.Handle] = wrap;
+            tex.SetTexID(wrap.Handle);
+            tex.SetStatus(ImTextureStatus.Ok);
+        }
+        else if (tex.Status == ImTextureStatus.WantUpdates)
+        {
+            using var resource = default(ComPtr<ID3D11Resource>);
+            ((ID3D11ShaderResourceView*)tex.TexID.Handle)->GetResource(resource.GetAddressOf());
+            foreach (var r in tex.Updates)
+            {
+                var box = new D3D11_BOX
+                {
+                    left = r.X,
+                    top = r.Y,
+                    right = (uint)(r.X + r.W),
+                    bottom = (uint)(r.Y + r.H),
+                    front = 0,
+                    back = 1,
+                };
+                this.context.Get()->UpdateSubresource(
+                    resource.Get(),
+                    0,
+                    &box,
+                    tex.GetPixelsAt(r.X, r.Y),
+                    (uint)tex.GetPitch(),
+                    0);
+            }
 
-            var tex = this.CreateTexture2D(
-                new(fontPixels, width * height * bytespp),
-                new(width, height, (int)DXGI_FORMAT.DXGI_FORMAT_R8G8B8A8_UNORM, width * bytespp),
-                false,
-                false,
-                false,
-                $"Font#{textureIndex}");
-            io.Fonts.SetTexID(textureIndex, tex.Handle);
-            this.fontTextures.Add(tex);
+            tex.SetStatus(ImTextureStatus.Ok);
         }
 
-        io.Fonts.ClearTexData();
+        if (tex.Status == ImTextureStatus.WantDestroy && tex.UnusedFrames > 0)
+            this.DestroyTexture(tex);
+    }
+
+    /// <summary>Destroys the GPU resources of a texture.</summary>
+    /// <param name="tex">The texture.</param>
+    private void DestroyTexture(ImTextureDataPtr tex)
+    {
+        if (this.imguiTextures.Remove((nint)tex.Handle, out var wrap))
+            wrap.Dispose();
+        tex.SetTexID(ImTextureID.Null);
+        tex.SetStatus(ImTextureStatus.Destroyed);
     }
 
     /// <summary>
@@ -1094,7 +1119,7 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
 
             uint noiseW, noiseH;
             converter.Get()->GetSize(&noiseW, &noiseH).ThrowOnError();
-            var pitch = (uint)(noiseW * 4);
+            var pitch = noiseW * 4;
             var pixelBytes = new byte[noiseH * pitch];
             fixed (byte* pPixels = pixelBytes)
             {
@@ -1149,8 +1174,6 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
             fixed (ID3D11BlendState** ppBlendState = &this.blurBlendState.GetPinnableReference())
                 this.device.Get()->CreateBlendState(&blurBlendDesc, ppBlendState).ThrowOnError();
         }
-
-        this.CreateFontsTexture();
     }
 
     private void ReleaseUnmanagedResources()
@@ -1172,11 +1195,8 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
         if (this.renderNamePtr != 0)
             Marshal.FreeHGlobal(this.renderNamePtr);
 
-        foreach (var fontResourceView in this.fontTextures)
-            fontResourceView.Dispose();
-
-        foreach (var i in Enumerable.Range(0, io.Fonts.Textures.Size))
-            io.Fonts.SetTexID(i, ImTextureID.Null);
+        foreach (var tex in ImGui.GetPlatformIO().Textures)
+            this.DestroyTexture(tex);
 
         this.device.Reset();
         this.context.Reset();

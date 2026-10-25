@@ -761,7 +761,7 @@ internal partial class InterfaceManager : IInternalDisposableService
 
             style.Apply();
 
-            ImGui.GetIO().FontGlobalScale = configuration.GlobalUiScale;
+            ImGui.GetStyle().FontScaleMain = configuration.GlobalUiScale;
 
             if (!configuration.IsDocking)
             {
@@ -776,12 +776,12 @@ internal partial class InterfaceManager : IInternalDisposableService
             if (!configuration.IsGamepadNavigationEnabled)
             {
                 ImGui.GetIO().BackendFlags &= ~ImGuiBackendFlags.HasGamepad;
-                ImGui.GetIO().ConfigFlags &= ~ImGuiConfigFlags.NavEnableSetMousePos;
+                ImGui.GetIO().ConfigNavMoveSetMousePos = false;
             }
             else
             {
                 ImGui.GetIO().BackendFlags |= ImGuiBackendFlags.HasGamepad;
-                ImGui.GetIO().ConfigFlags |= ImGuiConfigFlags.NavEnableSetMousePos;
+                ImGui.GetIO().ConfigNavMoveSetMousePos = true;
             }
 
             // NOTE (Chiv) Explicitly deactivate on dalamud boot
