@@ -132,6 +132,59 @@ public ref struct ImU8String
     {
     }
 
+    /// <summary>Initializes a new instance of the <see cref="ImU8String"/> struct as a label that shows
+    /// <paramref name="text"/> as it is, with an explicit ID.</summary>
+    /// <param name="text">The text to show. <c>##</c> and <c>###</c> in it are shown too.</param>
+    /// <param name="id">The ID. Starting with <c>##</c> or <c>###</c>, it overrides <paramref name="appendId"/> as
+    /// ImGui labels do. After that prefix, it may not start with <c>#</c> or contain <c>##</c>.</param>
+    /// <param name="appendId">Whether <paramref name="text"/> is part of the ID too, as with <c>text##id</c>.
+    /// Otherwise, the ID stays the same when the text changes, as with <c>text###id</c>.</param>
+    /// <remarks>ImGui hashes <c>text##id</c> if <paramref name="appendId"/> is set or <paramref name="id"/> is empty
+    /// after its leading <c>##</c> or <c>###</c>, and <c>id</c> otherwise. An empty ID thus hashes <c>text##</c>,
+    /// not <c>text</c>. The separator is always written, so that <c>##</c> in the text is never taken as one.
+    /// </remarks>
+    /// <exception cref="ArgumentException">If <paramref name="id"/> starts with <c>#</c> or contains <c>##</c> after
+    /// its prefix.</exception>
+    public ImU8String(ImU8String text, ImU8String id, bool appendId = true)
+        : this()
+    {
+        var textSpan = text.Span;
+        var idSpan = id.Span;
+        if (idSpan.StartsWith("###"u8))
+        {
+            idSpan = idSpan[3..];
+            appendId = false;
+        }
+        else if (idSpan.StartsWith("##"u8))
+        {
+            idSpan = idSpan[2..];
+            appendId = true;
+        }
+
+        if (!idSpan.IsEmpty && (idSpan[0] == '#' || idSpan.IndexOf("##"u8) >= 0))
+        {
+            text.Recycle();
+            id.Recycle();
+            throw new ArgumentException("An ID may not contain \"##\" or start with '#'.", nameof(id));
+        }
+
+        // Only the forked ImGui understands 0x1F. It ends the displayed text there, so that text may contain "##".
+        var suffix = idSpan.IsEmpty || appendId ? "\x1F##"u8 : "\x1F###"u8;
+        var length = textSpan.Length + 2 + idSpan.Length + suffix.Length;
+        this.state = State.Initialized | State.NullTerminated;
+        this.Reserve(length + 1);
+        var buffer = this.Buffer;
+        textSpan.CopyTo(buffer);
+        var pos = textSpan.Length;
+        "##"u8.CopyTo(buffer[pos..]);
+        idSpan.CopyTo(buffer[(pos + 2)..]);
+        suffix.CopyTo(buffer[(pos + 2 + idSpan.Length)..]);
+        buffer[length] = 0;
+        this.Length = length;
+        text.Recycle();
+        id.Recycle();
+    }
+
     public static ImU8String Empty => default;
 
     public readonly ReadOnlySpan<byte> Span =>

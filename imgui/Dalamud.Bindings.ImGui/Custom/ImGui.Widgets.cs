@@ -42,7 +42,8 @@ public static unsafe partial class ImGui
     {
         fixed (byte* strIdPtr = &strId.GetPinnableNullTerminatedReference())
         {
-            var r = ImGuiNative.BeginChild(strIdPtr, size, border ? (byte)1 : (byte)0, flags) != 0;
+            var childFlags = border ? ImGuiChildFlags.Borders : ImGuiChildFlags.None;
+            var r = ImGuiNative.BeginChild(strIdPtr, size, childFlags, flags) != 0;
             strId.Recycle();
             return r;
         }
@@ -50,7 +51,7 @@ public static unsafe partial class ImGui
 
     public static bool BeginChild(
         uint id, Vector2 size = default, bool border = false, ImGuiWindowFlags flags = ImGuiWindowFlags.None) =>
-        ImGuiNative.BeginChild(id, size, border ? (byte)1 : (byte)0, flags) != 0;
+        ImGuiNative.BeginChild(id, size, border ? ImGuiChildFlags.Borders : ImGuiChildFlags.None, flags) != 0;
 
     public static bool BeginCombo(
         ImU8String label, ImU8String previewValue, ImGuiComboFlags flags = ImGuiComboFlags.None)
@@ -96,7 +97,7 @@ public static unsafe partial class ImGui
     }
 
     public static bool BeginPopupContextItem(
-        ImU8String strId, ImGuiPopupFlags popupFlags = ImGuiPopupFlags.MouseButtonDefault)
+        ImU8String strId, ImGuiPopupFlags popupFlags = ImGuiPopupFlags.None)
     {
         fixed (byte* strIdPtr = &strId.GetPinnableNullTerminatedReference())
         {
@@ -107,7 +108,7 @@ public static unsafe partial class ImGui
     }
 
     public static bool BeginPopupContextWindow(
-        ImU8String strId, ImGuiPopupFlags popupFlags = ImGuiPopupFlags.MouseButtonDefault)
+        ImU8String strId, ImGuiPopupFlags popupFlags = ImGuiPopupFlags.None)
     {
         fixed (byte* strIdPtr = &strId.GetPinnableNullTerminatedReference())
         {
@@ -118,7 +119,7 @@ public static unsafe partial class ImGui
     }
 
     public static bool BeginPopupContextVoid(
-        ImU8String strId, ImGuiPopupFlags popupFlags = ImGuiPopupFlags.MouseButtonDefault)
+        ImU8String strId, ImGuiPopupFlags popupFlags = ImGuiPopupFlags.None)
     {
         fixed (byte* strIdPtr = &strId.GetPinnableNullTerminatedReference())
         {
@@ -320,9 +321,11 @@ public static unsafe partial class ImGui
 
     public static bool Draw(ImGuiTextFilterPtr self, ImU8String label = default, float width = 0.0f)
     {
-        fixed (byte* labelPtr = &label.GetPinnableNullTerminatedReference("Filter (inc,-exc)"u8))
+        fixed (byte* labelPtr = &label.GetPinnableNullTerminatedReference("Filter"u8))
         {
-            var r = ImGuiNative.Draw(self.Handle, labelPtr, width) != 0;
+            if (width != 0.0f)
+                SetNextItemWidth(width);
+            var r = ImGuiNative.Draw(self.Handle, labelPtr) != 0;
             label.Recycle();
             return r;
         }
@@ -336,14 +339,6 @@ public static unsafe partial class ImGui
             defaultFilter.Recycle();
             return r;
         }
-    }
-
-    public static ImGuiTextRangePtr ImGuiTextRange() => ImGuiNative.ImGuiTextRange();
-
-    public static ImGuiTextRangePtr ImGuiTextRange(ReadOnlySpan<byte> text)
-    {
-        fixed (byte* textPtr = text)
-            return ImGuiNative.ImGuiTextRange(textPtr, textPtr + text.Length);
     }
 
     public static bool InvisibleButton(
@@ -464,7 +459,7 @@ public static unsafe partial class ImGui
         ImGuiNative.OpenPopup(id, popupFlags);
 
     public static void OpenPopupOnItemClick(
-        ImU8String strId, ImGuiPopupFlags popupFlags = ImGuiPopupFlags.MouseButtonDefault)
+        ImU8String strId, ImGuiPopupFlags popupFlags = ImGuiPopupFlags.None)
     {
         fixed (byte* strIdPtr = &strId.GetPinnableNullTerminatedReference())
             ImGuiNative.OpenPopupOnItemClick(strIdPtr, popupFlags);
@@ -608,13 +603,6 @@ public static unsafe partial class ImGui
         fixed (byte* namePtr = &name.GetPinnableNullTerminatedReference())
             ImGuiNative.SetWindowSize(namePtr, size, cond);
         name.Recycle();
-    }
-
-    public static void ShowFontSelector(ImU8String label)
-    {
-        fixed (byte* labelPtr = &label.GetPinnableNullTerminatedReference())
-            ImGuiNative.ShowFontSelector(labelPtr);
-        label.Recycle();
     }
 
     public static bool ShowStyleSelector(ImU8String label)

@@ -6,13 +6,6 @@ namespace Dalamud.Bindings.ImGui;
 [SuppressMessage("ReSharper", "InconsistentNaming")]
 public static unsafe partial class ImGui
 {
-    public static void AddText(ImFontGlyphRangesBuilderPtr self, ImU8String text)
-    {
-        fixed (byte* textPtr = text)
-            ImGuiNative.AddText(self.Handle, textPtr, textPtr + text.Length);
-        text.Recycle();
-    }
-
     public static void AddText(ImDrawListPtr self, Vector2 pos, uint col, ImU8String text)
     {
         fixed (byte* textPtr = text)
@@ -58,7 +51,12 @@ public static unsafe partial class ImGui
     public static void BulletText(ImU8String text)
     {
         ImGuiWindow* window = ImGuiP.GetCurrentWindow();
-        if (window->SkipItems != 0) return;
+        if (window->SkipItems != 0)
+        {
+            text.Recycle();
+            return;
+        }
+
         scoped ref var g = ref *GetCurrentContext().Handle;
         scoped ref readonly var style = ref g.Style;
         var labelSize = CalcTextSize(text.Span);
@@ -70,7 +68,10 @@ public static unsafe partial class ImGui
         ImGuiP.ItemSize(totalSize, 0.0f);
         var bb = new ImRect(pos, pos + totalSize);
         if (!ImGuiP.ItemAdd(bb, 0))
+        {
+            text.Recycle();
             return;
+        }
 
         // Render
         var textCol = GetColorU32(ImGuiCol.Text);
@@ -79,15 +80,15 @@ public static unsafe partial class ImGui
             bb.Min + new Vector2(style.FramePadding.X + g.FontSize * 0.5f, g.FontSize * 0.5f),
             textCol);
         ImGuiP.RenderText(bb.Min + new Vector2(g.FontSize + style.FramePadding.X * 2, 0.0f), text.Span, false);
+        text.Recycle();
     }
 
     public static Vector2 CalcTextSize(
         ImU8String text, bool hideTextAfterDoubleHash = false, float wrapWidth = -1.0f)
     {
-        var @out = Vector2.Zero;
+        Vector2 @out;
         fixed (byte* textPtr = text)
-            ImGuiNative.CalcTextSize(
-                &@out,
+            @out = ImGuiNative.CalcTextSize(
                 textPtr,
                 textPtr + text.Length,
                 hideTextAfterDoubleHash ? (byte)1 : (byte)0,
@@ -96,39 +97,37 @@ public static unsafe partial class ImGui
         return @out;
     }
 
+    /// <summary>Measures text in a font at a size, like the removed <c>ImFont::CalcTextSizeA</c>.</summary>
+    /// <param name="font">The font.</param>
+    /// <param name="size">Size in pixels (after global scaling).</param>
+    /// <param name="maxWidth">Stop measuring at this width.</param>
+    /// <param name="wrapWidth">Wrap width. 0 or less disables wrapping.</param>
+    /// <param name="text">The text.</param>
+    /// <param name="remaining">Bytes measured.</param>
+    /// <returns>The size.</returns>
     public static Vector2 CalcTextSizeA(
-        ImFontPtr self, float size, float maxWidth, float wrapWidth, ImU8String text, out int remaining)
+        ImFontPtr font, float size, float maxWidth, float wrapWidth, ImU8String text, out int remaining)
     {
-        var @out = Vector2.Zero;
+        ImGuiP.GetTextDesc(out var desc, wrapWidth);
+        desc.Size = size;
+        desc.MaxWidth = maxWidth;
+        Vector2 @out;
         fixed (byte* textPtr = text)
         {
             byte* remainingPtr = null;
-            ImGuiNative.CalcTextSizeA(
-                &@out,
-                self.Handle,
-                size,
-                maxWidth,
-                wrapWidth,
+            @out = ImGuiPNative.CalcTextSizeEx(
+                font.Handle,
+                &desc,
                 textPtr,
                 textPtr + text.Length,
-                &remainingPtr);
+                textPtr + text.Length,
+                &remainingPtr,
+                null);
             remaining = (int)(remainingPtr - textPtr);
         }
 
         text.Recycle();
         return @out;
-    }
-
-    public static int CalcWordWrapPositionA(
-        ImFontPtr font, float scale, ImU8String text, float wrapWidth)
-    {
-        fixed (byte* ptr = text)
-        {
-            var r =
-                (int)(ImGuiNative.CalcWordWrapPositionA(font.Handle, scale, ptr, ptr + text.Length, wrapWidth) - ptr);
-            text.Recycle();
-            return r;
-        }
     }
 
     public static void InsertChars(
@@ -155,8 +154,8 @@ public static unsafe partial class ImGui
         scoped ref readonly var style = ref g.Style;
         var w = CalcItemWidth();
 
-        var valueSize = CalcTextSize(text);
-        var labelSize = CalcTextSize(label, true);
+        var valueSize = CalcTextSize(text.Span);
+        var labelSize = CalcTextSize(label.Span, true);
 
         var pos = window->DC.CursorPos;
         var valueBb = new ImRect(pos, pos + new Vector2(w, valueSize.Y + style.FramePadding.Y * 2));
@@ -198,7 +197,7 @@ public static unsafe partial class ImGui
         }
         else
         {
-            append(&g.Handle->LogBuffer, text);
+            append(&g.Handle->LogBuffer, text.Span);
         }
 
         text.Recycle();
@@ -214,28 +213,43 @@ public static unsafe partial class ImGui
         }
     }
 
+    /// <summary>Draws text in a font at a size, like the removed <c>ImFont::RenderText</c>.</summary>
+    /// <param name="font">The font.</param>
+    /// <param name="drawList">The draw list.</param>
+    /// <param name="size">Size in pixels (after global scaling).</param>
+    /// <param name="pos">Top-left position.</param>
+    /// <param name="col">Color.</param>
+    /// <param name="clipRect">Clip rectangle.</param>
+    /// <param name="text">The text.</param>
+    /// <param name="wrapWidth">Wrap width. 0 or less disables wrapping.</param>
+    /// <param name="cpuFineClip">Clip glyph quads on the CPU.</param>
     public static void RenderText(
-        ImFontPtr self, ImDrawListPtr drawList, float size, Vector2 pos, uint col, Vector4 clipRect,
+        ImFontPtr font, ImDrawListPtr drawList, float size, Vector2 pos, uint col, Vector4 clipRect,
         ImU8String text, float wrapWidth = 0.0f, bool cpuFineClip = false)
     {
+        ImGuiP.GetTextDesc(out var desc, wrapWidth, drawList: drawList);
+        desc.Size = size;
         fixed (byte* textPtr = text)
-            ImGuiNative.RenderText(
-                self,
+        {
+            ImGuiNative.AddTextEx(
                 drawList,
-                size,
+                font,
+                &desc,
                 pos,
                 col,
-                clipRect,
                 textPtr,
                 textPtr + text.Length,
-                wrapWidth,
-                cpuFineClip ? (byte)1 : (byte)0);
+                &clipRect,
+                cpuFineClip ? ImTextRenderFlags.CpuFineClip : ImTextRenderFlags.None,
+                null);
+        }
+
         text.Recycle();
     }
 
     public static void SetTooltip(ImU8String text)
     {
-        ImGuiP.BeginTooltipEx(ImGuiTooltipFlags.OverridePreviousTooltip, ImGuiWindowFlags.None);
+        ImGuiP.BeginTooltipEx(ImGuiTooltipFlags.OverridePrevious, ImGuiWindowFlags.None);
         Text(text.Span);
         EndTooltip();
         text.Recycle();

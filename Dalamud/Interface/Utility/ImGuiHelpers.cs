@@ -136,7 +136,8 @@ public static class ImGuiHelpers
         ImGuiNative.AddCallback(
             drawList,
             (delegate*<ImDrawList*, ImDrawCmd*, void>)(nint)(long)CustomImDrawCallbackEnum.Blur,
-            data);
+            data,
+            0);
         drawList.PopClipRect();
     }
 
@@ -198,6 +199,7 @@ public static class ImGuiHelpers
             ElemCount = 0,
             UserCallback = (void*)(nint)(long)CustomImDrawCallbackEnum.Blur,
             UserCallbackData = data,
+            UserCallbackDataOffset = -1,
         };
 
         var cmdVec = new ImVectorWrapper<ImDrawCmd>(drawList.Handle->CmdBuffer.ToUntyped());

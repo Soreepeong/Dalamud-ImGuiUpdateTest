@@ -25,6 +25,11 @@ namespace Dalamud.Bindings.ImGui
 		/// <summary>
 		/// To be documented.
 		/// </summary>
+		public unsafe ImGuiWindow* Window;
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
 		public ImVector<ImGuiTabItem> Tabs;
 
 		/// <summary>
@@ -50,6 +55,11 @@ namespace Dalamud.Bindings.ImGui
 		/// <summary>
 		/// To be documented.
 		/// </summary>
+		public uint NextScrollToTabId;
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
 		public uint VisibleTabId;
 
 		/// <summary>
@@ -66,6 +76,11 @@ namespace Dalamud.Bindings.ImGui
 		/// To be documented.
 		/// </summary>
 		public ImRect BarRect;
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public float BarRectPrevWidth;
 
 		/// <summary>
 		/// To be documented.
@@ -120,6 +135,16 @@ namespace Dalamud.Bindings.ImGui
 		/// <summary>
 		/// To be documented.
 		/// </summary>
+		public float SeparatorMinX;
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public float SeparatorMaxX;
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
 		public uint ReorderRequestTabId;
 
 		/// <summary>
@@ -146,6 +171,11 @@ namespace Dalamud.Bindings.ImGui
 		/// To be documented.
 		/// </summary>
 		public byte TabsAddedNew;
+
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public byte ScrollButtonEnabled;
 
 		/// <summary>
 		/// To be documented.
@@ -181,17 +211,20 @@ namespace Dalamud.Bindings.ImGui
 		/// <summary>
 		/// To be documented.
 		/// </summary>
-		public unsafe ImGuiTabBar(ImVector<ImGuiTabItem> tabs = default, ImGuiTabBarFlags flags = default, uint id = default, uint selectedTabId = default, uint nextSelectedTabId = default, uint visibleTabId = default, int currFrameVisible = default, int prevFrameVisible = default, ImRect barRect = default, float currTabsContentsHeight = default, float prevTabsContentsHeight = default, float widthAllTabs = default, float widthAllTabsIdeal = default, float scrollingAnim = default, float scrollingTarget = default, float scrollingTargetDistToVisibility = default, float scrollingSpeed = default, float scrollingRectMinX = default, float scrollingRectMaxX = default, uint reorderRequestTabId = default, short reorderRequestOffset = default, sbyte beginCount = default, bool wantLayout = default, bool visibleTabWasSubmitted = default, bool tabsAddedNew = default, short tabsActiveCount = default, short lastTabItemIdx = default, float itemSpacingY = default, Vector2 framePadding = default, Vector2 backupCursorPos = default, ImGuiTextBuffer tabsNames = default)
+		public unsafe ImGuiTabBar(ImGuiWindowPtr window = default, ImVector<ImGuiTabItem> tabs = default, ImGuiTabBarFlags flags = default, uint id = default, uint selectedTabId = default, uint nextSelectedTabId = default, uint nextScrollToTabId = default, uint visibleTabId = default, int currFrameVisible = default, int prevFrameVisible = default, ImRect barRect = default, float barRectPrevWidth = default, float currTabsContentsHeight = default, float prevTabsContentsHeight = default, float widthAllTabs = default, float widthAllTabsIdeal = default, float scrollingAnim = default, float scrollingTarget = default, float scrollingTargetDistToVisibility = default, float scrollingSpeed = default, float scrollingRectMinX = default, float scrollingRectMaxX = default, float separatorMinX = default, float separatorMaxX = default, uint reorderRequestTabId = default, short reorderRequestOffset = default, sbyte beginCount = default, bool wantLayout = default, bool visibleTabWasSubmitted = default, bool tabsAddedNew = default, bool scrollButtonEnabled = default, short tabsActiveCount = default, short lastTabItemIdx = default, float itemSpacingY = default, Vector2 framePadding = default, Vector2 backupCursorPos = default, ImGuiTextBuffer tabsNames = default)
 		{
+			Window = window;
 			Tabs = tabs;
 			Flags = flags;
 			ID = id;
 			SelectedTabId = selectedTabId;
 			NextSelectedTabId = nextSelectedTabId;
+			NextScrollToTabId = nextScrollToTabId;
 			VisibleTabId = visibleTabId;
 			CurrFrameVisible = currFrameVisible;
 			PrevFrameVisible = prevFrameVisible;
 			BarRect = barRect;
+			BarRectPrevWidth = barRectPrevWidth;
 			CurrTabsContentsHeight = currTabsContentsHeight;
 			PrevTabsContentsHeight = prevTabsContentsHeight;
 			WidthAllTabs = widthAllTabs;
@@ -202,12 +235,15 @@ namespace Dalamud.Bindings.ImGui
 			ScrollingSpeed = scrollingSpeed;
 			ScrollingRectMinX = scrollingRectMinX;
 			ScrollingRectMaxX = scrollingRectMaxX;
+			SeparatorMinX = separatorMinX;
+			SeparatorMaxX = separatorMaxX;
 			ReorderRequestTabId = reorderRequestTabId;
 			ReorderRequestOffset = reorderRequestOffset;
 			BeginCount = beginCount;
 			WantLayout = wantLayout ? (byte)1 : (byte)0;
 			VisibleTabWasSubmitted = visibleTabWasSubmitted ? (byte)1 : (byte)0;
 			TabsAddedNew = tabsAddedNew ? (byte)1 : (byte)0;
+			ScrollButtonEnabled = scrollButtonEnabled ? (byte)1 : (byte)0;
 			TabsActiveCount = tabsActiveCount;
 			LastTabItemIdx = lastTabItemIdx;
 			ItemSpacingY = itemSpacingY;
@@ -216,17 +252,6 @@ namespace Dalamud.Bindings.ImGui
 			TabsNames = tabsNames;
 		}
 
-
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public unsafe void Destroy()
-		{
-			fixed (ImGuiTabBar* @this = &this)
-			{
-				ImGui.DestroyNative(@this);
-			}
-		}
 
 	}
 
@@ -274,6 +299,10 @@ namespace Dalamud.Bindings.ImGui
 		/// <summary>
 		/// To be documented.
 		/// </summary>
+		public ref ImGuiWindowPtr Window => ref Unsafe.AsRef<ImGuiWindowPtr>(&Handle->Window);
+		/// <summary>
+		/// To be documented.
+		/// </summary>
 		public ref ImVector<ImGuiTabItem> Tabs => ref Unsafe.AsRef<ImVector<ImGuiTabItem>>(&Handle->Tabs);
 		/// <summary>
 		/// To be documented.
@@ -294,6 +323,10 @@ namespace Dalamud.Bindings.ImGui
 		/// <summary>
 		/// To be documented.
 		/// </summary>
+		public ref uint NextScrollToTabId => ref Unsafe.AsRef<uint>(&Handle->NextScrollToTabId);
+		/// <summary>
+		/// To be documented.
+		/// </summary>
 		public ref uint VisibleTabId => ref Unsafe.AsRef<uint>(&Handle->VisibleTabId);
 		/// <summary>
 		/// To be documented.
@@ -307,6 +340,10 @@ namespace Dalamud.Bindings.ImGui
 		/// To be documented.
 		/// </summary>
 		public ref ImRect BarRect => ref Unsafe.AsRef<ImRect>(&Handle->BarRect);
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public ref float BarRectPrevWidth => ref Unsafe.AsRef<float>(&Handle->BarRectPrevWidth);
 		/// <summary>
 		/// To be documented.
 		/// </summary>
@@ -350,6 +387,14 @@ namespace Dalamud.Bindings.ImGui
 		/// <summary>
 		/// To be documented.
 		/// </summary>
+		public ref float SeparatorMinX => ref Unsafe.AsRef<float>(&Handle->SeparatorMinX);
+		/// <summary>
+		/// To be documented.
+		/// </summary>
+		public ref float SeparatorMaxX => ref Unsafe.AsRef<float>(&Handle->SeparatorMaxX);
+		/// <summary>
+		/// To be documented.
+		/// </summary>
 		public ref uint ReorderRequestTabId => ref Unsafe.AsRef<uint>(&Handle->ReorderRequestTabId);
 		/// <summary>
 		/// To be documented.
@@ -374,6 +419,10 @@ namespace Dalamud.Bindings.ImGui
 		/// <summary>
 		/// To be documented.
 		/// </summary>
+		public ref bool ScrollButtonEnabled => ref Unsafe.AsRef<bool>(&Handle->ScrollButtonEnabled);
+		/// <summary>
+		/// To be documented.
+		/// </summary>
 		public ref short TabsActiveCount => ref Unsafe.AsRef<short>(&Handle->TabsActiveCount);
 		/// <summary>
 		/// To be documented.
@@ -395,14 +444,6 @@ namespace Dalamud.Bindings.ImGui
 		/// To be documented.
 		/// </summary>
 		public ref ImGuiTextBuffer TabsNames => ref Unsafe.AsRef<ImGuiTextBuffer>(&Handle->TabsNames);
-		/// <summary>
-		/// To be documented.
-		/// </summary>
-		public unsafe void Destroy()
-		{
-			ImGui.DestroyNative(Handle);
-		}
-
 	}
 
 }
