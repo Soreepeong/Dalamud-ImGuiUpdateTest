@@ -7,15 +7,12 @@ using System.Numerics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.Unicode;
 
 using Dalamud.Bindings.ImGui;
 using Dalamud.Configuration.Internal;
 using Dalamud.Game.Text;
 using Dalamud.Hooking.WndProcHook;
 using Dalamud.Interface.Colors;
-using Dalamud.Interface.GameFonts;
-using Dalamud.Interface.ManagedFontAtlas.Internals;
 using Dalamud.Interface.Utility;
 
 #if IMEDEBUG
@@ -42,26 +39,6 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
                   .Select(x => ((int)x.GetRawConstantValue()!, x.Name))
                   .DistinctBy(x => x.Item1)
                   .ToDictionary(x => x.Item1, x => x.Name);
-
-    private static readonly UnicodeRange[] HanRange =
-    [
-        UnicodeRanges.CjkRadicalsSupplement,
-        UnicodeRanges.CjkSymbolsandPunctuation,
-        UnicodeRanges.CjkUnifiedIdeographsExtensionA,
-        UnicodeRanges.CjkUnifiedIdeographs,
-        UnicodeRanges.CjkCompatibilityIdeographs,
-        UnicodeRanges.CjkCompatibilityForms
-        // No more; Extension B~ are outside BMP range
-    ];
-
-    private static readonly UnicodeRange[] HangulRange =
-    [
-        UnicodeRanges.HangulJamo,
-        UnicodeRanges.HangulSyllables,
-        UnicodeRanges.HangulCompatibilityJamo,
-        UnicodeRanges.HangulJamoExtendedA,
-        UnicodeRanges.HangulJamoExtendedB
-    ];
 
     [ServiceManager.ServiceDependency]
     private readonly DalamudConfiguration dalamudConfiguration = Service<DalamudConfiguration>.Get();
@@ -129,16 +106,6 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
     private delegate void ImGuiSetPlatformImeDataDelegate(ImGuiViewportPtr viewport, ImGuiPlatformImeDataPtr data);
 
     /// <summary>
-    /// Gets a value indicating whether Han(Chinese) input has been detected.
-    /// </summary>
-    public bool EncounteredHan { get; private set; }
-
-    /// <summary>
-    /// Gets a value indicating whether Hangul(Korean) input has been detected.
-    /// </summary>
-    public bool EncounteredHangul { get; private set; }
-
-    /// <summary>
     /// Gets a value indicating whether to display the cursor in input text. This also deals with blinking.
     /// </summary>
     private static bool ShowCursorInInputText
@@ -172,39 +139,6 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
         this.interfaceManager.Draw -= this.Draw;
         this.ReleaseUnmanagedResources();
         GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Looks for the characters inside <paramref name="str"/> and enables fonts accordingly.
-    /// </summary>
-    /// <param name="str">The string.</param>
-    public void ReflectCharacterEncounters(string str)
-    {
-        foreach (var chr in str)
-        {
-            if (!this.EncounteredHan)
-            {
-                if (HanRange.Any(x => x.FirstCodePoint <= chr && chr < x.FirstCodePoint + x.Length))
-                {
-                    if (Service<FontAtlasFactory>.Get()
-                                                 ?.GetFdtReader(GameFontFamilyAndSize.Axis12)
-                                                 .FindGlyph(chr) is null)
-                    {
-                        this.EncounteredHan = true;
-                        Service<InterfaceManager>.Get().RebuildFonts();
-                    }
-                }
-            }
-
-            if (!this.EncounteredHangul)
-            {
-                if (HangulRange.Any(x => x.FirstCodePoint <= chr && chr < x.FirstCodePoint + x.Length))
-                {
-                    this.EncounteredHangul = true;
-                    Service<InterfaceManager>.Get().RebuildFonts();
-                }
-            }
-        }
     }
 
     private static ImGuiInputTextStatePtr GetInputTextState() => new(&ImGui.GetCurrentContext().Handle->InputTextState);
@@ -535,8 +469,6 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
         Log.Verbose($"{nameof(this.ReplaceCompositionString)}({newString})");
 #endif
 
-        this.ReflectCharacterEncounters(newString);
-
         var textState = GetInputTextState();
         if (this.temporaryUndoSelection is not null)
         {
@@ -636,7 +568,6 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
                      (int)Math.Min(candlist.dwCount - candlist.dwPageStart, candlist.dwPageSize)))
         {
             this.candidateStrings.Add(ToUcs2((char*)(pStorage + candlist.dwOffset[i])));
-            this.ReflectCharacterEncounters(this.candidateStrings[^1].String);
         }
     }
 

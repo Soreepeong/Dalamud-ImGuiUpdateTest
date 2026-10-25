@@ -13,9 +13,6 @@ internal interface IImGuiBackend : IDisposable
     /// <summary>User methods invoked every ImGui frame on handling inputs.</summary>
     event ImGuiNewInputFrameDelegate? NewInputFrame;
 
-    /// <summary>User methods invoked every ImGui frame on handling renders.</summary>
-    event ImGuiNewRenderFrameDelegate? NewRenderFrame;
-
     /// <summary>Gets or sets a value indicating whether the cursor should be overridden with the ImGui cursor.
     /// </summary>
     bool UpdateCursor { get; set; }
@@ -44,7 +41,6 @@ internal interface IImGuiBackend : IDisposable
     void OnPostResize(int newWidth, int newHeight);
 
     /// <summary>Invalidates fonts immediately.</summary>
-    /// <remarks>Call this while handling <see cref="NewRenderFrame"/>.</remarks>
     void InvalidateFonts();
 
     /// <summary>Determines if <paramref name="cursorHandle"/> is owned by this.</summary>

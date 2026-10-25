@@ -93,9 +93,6 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
     public event ImGuiNewInputFrameDelegate? NewInputFrame;
 
     /// <inheritdoc/>
-    public event ImGuiNewRenderFrameDelegate? NewRenderFrame;
-
-    /// <inheritdoc/>
     public bool UpdateCursor
     {
         get => this.imguiInput.UpdateCursor;
@@ -155,7 +152,6 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
     public void Render()
     {
         this.imguiRenderer.OnNewFrame();
-        this.NewRenderFrame?.Invoke();
         this.imguiInput.NewFrame(this.targetWidth, this.targetHeight);
         this.NewInputFrame?.Invoke();
 

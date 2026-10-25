@@ -146,11 +146,6 @@ internal partial class InterfaceManager : IInternalDisposableService
     public event Action? ResizeBuffers;
 
     /// <summary>
-    /// Gets or sets an action that is executed right after fonts are rebuilt.
-    /// </summary>
-    public event Action? AfterBuildFonts;
-
-    /// <summary>
     /// Invoked when the default global scale used by ImGui has been changed through Dalamud.
     /// </summary>
     /// <remarks> Fonts will generally not have finished rebuilding when this is invoked, so if you need to access the font you should subscribe to <seealso cref="DefaultFontHandle"/>.ImFontChanged instead.</remarks>
@@ -287,13 +282,6 @@ internal partial class InterfaceManager : IInternalDisposableService
     /// </summary>
     public Task FontBuildTask => WhenFontsReady().dalamudAtlas!.BuildTask;
 
-    /// <summary>Gets the number of calls to <see cref="DxgiSwapChainPresentDetour"/> so far.</summary>
-    /// <remarks>
-    /// The value increases even when Dalamud is hidden via &quot;/xlui hide&quot;.
-    /// <see cref="DalamudInterface.FrameCount"/> does not.
-    /// </remarks>
-    public long CumulativePresentCalls { get; private set; }
-
     /// <inheritdoc cref="AssertHandler.ShowAsserts"/>
     public bool ShowAsserts
     {
@@ -368,12 +356,12 @@ internal partial class InterfaceManager : IInternalDisposableService
     }
 
     /// <summary>
-    /// Enqueue an <see cref="ILockedImFont"/> to be disposed at the end of the frame.
+    /// Enqueues an object to be disposed at the end of the frame.
     /// </summary>
-    /// <param name="locked">The disposable.</param>
-    public void EnqueueDeferredDispose(IDisposable locked)
+    /// <param name="disposable">The disposable.</param>
+    public void EnqueueDeferredDispose(IDisposable disposable)
     {
-        this.deferredDisposeDisposables.Add(locked);
+        this.deferredDisposeDisposables.Add(disposable);
     }
 
     /// <summary>Queues an action to be run before <see cref="ImGui.Render"/> call.</summary>
@@ -668,7 +656,6 @@ internal partial class InterfaceManager : IInternalDisposableService
     /// <param name="activeBackend">The scene to draw to.</param>
     private void RenderDalamudDraw(IImGuiBackend activeBackend)
     {
-        this.CumulativePresentCalls++;
         this.IsMainThreadInPresent = true;
 
         while (this.runBeforeImGuiRender.TryDequeue(out var action))
@@ -920,9 +907,6 @@ internal partial class InterfaceManager : IInternalDisposableService
                         // Update the reference to the resources of the default font.
                         this.defaultFontResourceLock?.Dispose();
                         this.defaultFontResourceLock = fontLocked;
-
-                        // Broadcast to auto-rebuilding instances.
-                        this.AfterBuildFonts.InvokeSafely();
                     });
             };
         }
