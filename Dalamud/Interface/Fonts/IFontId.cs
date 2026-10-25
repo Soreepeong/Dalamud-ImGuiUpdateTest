@@ -1,7 +1,7 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.ManagedFontAtlas;
 
-namespace Dalamud.Interface.FontIdentifier;
+namespace Dalamud.Interface.Fonts;
 
 /// <summary>
 /// Represents a font identifier.<br />

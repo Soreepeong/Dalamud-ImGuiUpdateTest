@@ -1,4 +1,4 @@
-namespace Dalamud.Interface.GameFonts;
+namespace Dalamud.Interface.Fonts.Internal;
 
 /// <summary>
 /// Marks the path for an enum value.

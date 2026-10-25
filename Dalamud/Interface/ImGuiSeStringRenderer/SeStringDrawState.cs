@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Fonts.Internal.SeStrings;
 using Dalamud.Interface.ImGuiSeStringRenderer.Internal;
 using Dalamud.Interface.Utility;
 

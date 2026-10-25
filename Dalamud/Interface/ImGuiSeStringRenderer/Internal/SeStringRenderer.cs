@@ -11,6 +11,7 @@ using Dalamud.Data;
 using Dalamud.Excel.Sheets;
 using Dalamud.Game;
 using Dalamud.Game.Text;
+using Dalamud.Interface.Fonts.Internal.SeStrings;
 using Dalamud.Interface.Utility;
 using Dalamud.Utility;
 using Dalamud.Utility.Unicode;

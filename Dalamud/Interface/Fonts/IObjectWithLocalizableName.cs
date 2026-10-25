@@ -4,7 +4,7 @@ using Dalamud.Utility;
 
 using TerraFX.Interop.DirectX;
 
-namespace Dalamud.Interface.FontIdentifier;
+namespace Dalamud.Interface.Fonts;
 
 /// <summary>
 /// Represents an object with localizable names.

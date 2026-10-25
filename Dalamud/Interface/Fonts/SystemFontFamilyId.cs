@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 using TerraFX.Interop.DirectX;
 using TerraFX.Interop.Windows;
 
-namespace Dalamud.Interface.FontIdentifier;
+namespace Dalamud.Interface.Fonts;
 
 /// <summary>
 /// Represents a font from system.
