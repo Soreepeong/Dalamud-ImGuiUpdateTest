@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Bindings.ImGuizmo;
 using Dalamud.Bindings.ImPlot;
+using Dalamud.Interface.Fonts.Internal.Glyphs;
 using Dalamud.Interface.ImGuiBackend.Delegates;
 using Dalamud.Interface.ImGuiBackend.Helpers;
 using Dalamud.Interface.ImGuiBackend.InputHandler;
@@ -84,7 +85,7 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
     /// <summary>
     /// Finalizes an instance of the <see cref="Dx11Win32Backend"/> class.
     /// </summary>
-    ~Dx11Win32Backend() => this.ReleaseUnmanagedResources();
+    ~Dx11Win32Backend() => this.ReleaseUnmanagedResources(false);
 
     /// <inheritdoc/>
     public event ImGuiBuildUiDelegate? BuildUi;
@@ -140,7 +141,7 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
     /// <inheritdoc/>
     public void Dispose()
     {
-        this.ReleaseUnmanagedResources();
+        this.ReleaseUnmanagedResources(true);
         GC.SuppressFinalize(this);
     }
 
@@ -220,13 +221,17 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
         }
     }
 
-    private void ReleaseUnmanagedResources()
+    private void ReleaseUnmanagedResources(bool disposing)
     {
         if (this.device.IsEmpty())
             return;
 
         this.imguiRenderer?.Dispose();
         this.imguiInput?.Dispose();
+
+        // The glyph atlas is main thread only, so the finalizer leaves it.
+        if (disposing)
+            GlyphAtlasTextResources.ReleaseDeviceResources();
 
         ImPlot.DestroyContext();
         ImGui.DestroyContext();

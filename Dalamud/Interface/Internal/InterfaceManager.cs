@@ -18,6 +18,7 @@ using Dalamud.Game.ClientState.Keys;
 using Dalamud.Hooking;
 using Dalamud.Hooking.Internal;
 using Dalamud.Hooking.WndProcHook;
+using Dalamud.Interface.Fonts.Internal.Glyphs;
 using Dalamud.Interface.ImGuiBackend;
 using Dalamud.Interface.ImGuiBackend.Delegates;
 using Dalamud.Interface.ImGuiNotification;
@@ -820,6 +821,9 @@ internal partial class InterfaceManager : IInternalDisposableService
 
     private void PostImGuiRender()
     {
+        // First, so that the frames of the font engine go on when a step after it throws.
+        GlyphAtlasTextResources.OnFrameRendered();
+
         while (this.runAfterImGuiRender.TryDequeue(out var action))
             action.InvokeSafely();
 
