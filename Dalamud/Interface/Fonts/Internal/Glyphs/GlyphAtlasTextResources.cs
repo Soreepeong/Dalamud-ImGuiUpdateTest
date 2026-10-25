@@ -1,3 +1,7 @@
+using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Fonts.Internal.Layout;
+using Dalamud.Interface.Fonts.Internal.Markup;
+
 using TerraFX.Interop.DirectX;
 using TerraFX.Interop.Windows;
 
@@ -7,6 +11,13 @@ namespace Dalamud.Interface.Fonts.Internal.Glyphs;
 /// <remarks>It is called on the main thread, a few times per frame or draw data, never per glyph.</remarks>
 internal static unsafe class GlyphAtlasTextResources
 {
+    /// <summary>Sets up text in the ImGui context just made.</summary>
+    public static void OnContextCreated() => TextLayouter.Install();
+
+    /// <summary>Starts the text of a frame, after <see cref="ImGui.NewFrame"/>.</summary>
+    /// <remarks>Drops markup callbacks pushed and never popped.</remarks>
+    public static void OnNewFrame() => TextCallbackStack.Shrink(0);
+
     /// <summary>Ends the frame of the font engine, once the frame has been rendered. Called once per frame, also
     /// after a frame that failed.</summary>
     /// <remarks><ul>

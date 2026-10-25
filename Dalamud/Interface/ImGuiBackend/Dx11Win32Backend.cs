@@ -66,6 +66,7 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
             this.WindowHandle = desc.OutputWindow;
 
             var ctx = ImGui.CreateContext();
+            GlyphAtlasTextResources.OnContextCreated();
             ImGuizmo.SetImGuiContext(ctx);
             ImPlot.SetImGuiContext(ctx);
             ImPlot.CreateContext();
@@ -157,6 +158,7 @@ internal sealed unsafe class Dx11Win32Backend : IWin32Backend
         this.NewInputFrame?.Invoke();
 
         ImGui.NewFrame();
+        GlyphAtlasTextResources.OnNewFrame();
         ImGuizmo.BeginFrame();
 
         this.BuildUi?.Invoke();
