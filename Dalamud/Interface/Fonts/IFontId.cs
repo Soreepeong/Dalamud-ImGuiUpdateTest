@@ -1,39 +1,24 @@
-using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.ManagedFontAtlas;
-
 namespace Dalamud.Interface.Fonts;
 
 /// <summary>
 /// Represents a font identifier.<br />
 /// Not intended for plugins to implement.
 /// </summary>
-public interface IFontId : IObjectWithLocalizableName
+public interface IFontId
 {
+    /// <summary>Gets the name of the face, such as Bold.</summary>
+    LocalizedName Name { get; }
+
     /// <summary>
     /// Gets the associated font family.
     /// </summary>
     IFontFamilyId Family { get; }
 
-    /// <summary>
-    /// Gets the font weight, ranging from 1 to 999.
-    /// </summary>
-    int Weight { get; }
+    /// <summary>Gets the weight, slant, and stretch of the face.</summary>
+    /// <remarks>For an installed font asked for by style, the style asked for. <see cref="FontStyle.Default"/> for
+    /// fonts with a single face.</remarks>
+    FontStyle Style { get; }
 
-    /// <summary>
-    /// Gets the font stretch, ranging from 1 to 9.
-    /// </summary>
-    int Stretch { get; }
-
-    /// <summary>
-    /// Gets the font style. Treat as an opaque value.
-    /// </summary>
-    int Style { get; }
-
-    /// <summary>
-    /// Adds this font to the given font build toolkit.
-    /// </summary>
-    /// <param name="tk">The font build toolkit.</param>
-    /// <param name="config">The font configuration. Some parameters may be ignored.</param>
-    /// <returns>The added font.</returns>
-    ImFontPtr AddToBuildToolkit(IFontAtlasBuildToolkitPreBuild tk, in SafeFontConfig config);
+    /// <summary>Gets a value indicating whether the font can render its own name. <c>false</c> for Wingdings.</summary>
+    internal bool PreviewsName => true;
 }

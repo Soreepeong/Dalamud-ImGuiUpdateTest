@@ -1,37 +1,17 @@
 namespace Dalamud.Interface.Fonts.Internal;
 
-/// <summary>
-/// Marks the path for an enum value.
-/// </summary>
+/// <summary>Marks the files of a game font size.</summary>
 [AttributeUsage(AttributeTargets.Field)]
-internal class GameFontFamilyAndSizeAttribute : Attribute
+internal sealed class GameFontFamilyAndSizeAttribute(string path, string texPathFormat, int horizontalOffset)
+    : Attribute
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="GameFontFamilyAndSizeAttribute"/> class.
-    /// </summary>
-    /// <param name="path">Inner path of the file.</param>
-    /// <param name="texPathFormat">the file path format for the relevant .tex files.</param>
-    /// <param name="horizontalOffset">Horizontal offset of the corresponding font.</param>
-    public GameFontFamilyAndSizeAttribute(string path, string texPathFormat, int horizontalOffset)
-    {
-        this.Path = path;
-        this.TexPathFormat = texPathFormat;
-        this.HorizontalOffset = horizontalOffset;
-    }
+    /// <summary>Gets the inner path of the .fdt file.</summary>
+    public string Path { get; } = path;
 
-    /// <summary>
-    /// Gets the path.
-    /// </summary>
-    public string Path { get; }
+    /// <summary>Gets the format of the paths of the .tex files, with the file number as the argument.</summary>
+    /// <seealso cref="string.Format(string, object?)"/>
+    public string TexPathFormat { get; } = texPathFormat;
 
-    /// <summary>
-    /// Gets the file path format for the relevant .tex files.<br />
-    /// Used for <see cref="string.Format(string,object?)"/>(<see cref="TexPathFormat"/>, <see cref="int"/>).
-    /// </summary>
-    public string TexPathFormat { get; }
-
-    /// <summary>
-    /// Gets the horizontal offset of the corresponding font.
-    /// </summary>
-    public int HorizontalOffset { get; }
+    /// <summary>Gets the horizontal offset of the glyphs.</summary>
+    public int HorizontalOffset { get; } = horizontalOffset;
 }

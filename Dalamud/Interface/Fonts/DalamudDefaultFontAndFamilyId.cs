@@ -1,11 +1,6 @@
 using System.Collections.Generic;
 
-using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.ManagedFontAtlas;
-
 using Newtonsoft.Json;
-
-using TerraFX.Interop.DirectX;
 
 namespace Dalamud.Interface.Fonts;
 
@@ -23,13 +18,9 @@ public sealed class DalamudDefaultFontAndFamilyId : IFontId, IFontFamilyId
     {
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc cref="IFontFamilyId.Name"/>
     [JsonIgnore]
-    public string EnglishName => "(Default)";
-
-    /// <inheritdoc/>
-    [JsonIgnore]
-    public IReadOnlyDictionary<string, string>? LocaleNames => null;
+    public LocalizedName Name { get; } = new("(Default)");
 
     /// <inheritdoc/>
     [JsonIgnore]
@@ -37,19 +28,14 @@ public sealed class DalamudDefaultFontAndFamilyId : IFontId, IFontFamilyId
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public int Weight => (int)DWRITE_FONT_WEIGHT.DWRITE_FONT_WEIGHT_NORMAL;
-
-    /// <inheritdoc/>
-    [JsonIgnore]
-    public int Stretch => (int)DWRITE_FONT_STRETCH.DWRITE_FONT_STRETCH_NORMAL;
-
-    /// <inheritdoc/>
-    [JsonIgnore]
-    public int Style => (int)DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_NORMAL;
+    public FontStyle Style => FontStyle.Default;
 
     /// <inheritdoc/>
     [JsonIgnore]
     public IReadOnlyList<IFontId> Fonts => new List<IFontId> { this }.AsReadOnly();
+
+    /// <inheritdoc/>
+    bool IFontId.PreviewsName => false;
 
     public static bool operator ==(DalamudDefaultFontAndFamilyId? left, DalamudDefaultFontAndFamilyId? right) =>
         left is null == right is null;
@@ -67,10 +53,5 @@ public sealed class DalamudDefaultFontAndFamilyId : IFontId, IFontFamilyId
     public override string ToString() => nameof(DalamudDefaultFontAndFamilyId);
 
     /// <inheritdoc/>
-    public ImFontPtr AddToBuildToolkit(IFontAtlasBuildToolkitPreBuild tk, in SafeFontConfig config)
-        => tk.AddDalamudDefaultFont(config.SizePx, config.GlyphRanges);
-    // TODO: mergeFont
-
-    /// <inheritdoc/>
-    public int FindBestMatch(int weight, int stretch, int style) => 0;
+    public int FindBestMatch(FontStyle style) => 0;
 }

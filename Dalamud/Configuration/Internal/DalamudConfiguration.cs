@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using Dalamud.Game.Chat;
 using Dalamud.Game.Text;
 using Dalamud.Interface;
-using Dalamud.Interface.FontIdentifier;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.Internal;
 using Dalamud.Interface.Internal.ReShadeHandling;
 using Dalamud.Interface.Style;
@@ -47,6 +47,9 @@ internal sealed class DalamudConfiguration : IInternalDisposableService
         TypeNameHandling = TypeNameHandling.All,
         TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple,
         Formatting = Formatting.Indented,
+        SerializationBinder = MovedTypeSerializationBinder.Instance,
+        ContractResolver = LegacyFontSpecContractResolver.Instance,
+        Error = SkipDefaultFontError,
     };
 
     [JsonIgnore]
@@ -168,10 +171,12 @@ internal sealed class DalamudConfiguration : IInternalDisposableService
     /// </summary>
     public float GlobalUiScale { get; set; } = 1.0f;
 
-    /// <summary>
-    /// Gets or sets the default font spec.
-    /// </summary>
-    public IFontSpec? DefaultFontSpec { get; set; }
+    /// <summary>Gets or sets the default font spec, or null for the built-in one.</summary>
+    /// <remarks>Saved as <c>DefaultFont</c>. Earlier versions save <c>DefaultFontSpec</c> in another format, and
+    /// reset every setting if they cannot read it, so it is only read. See <see cref="LegacyDefaultFontSpec"/>.
+    /// </remarks>
+    [JsonProperty("DefaultFont")]
+    public FontSpec? DefaultFontSpec { get; set; }
 
     /// <summary>Gets or sets the opacity of the IME state indicator.</summary>
     /// <value>0 will hide the state indicator. 1 will make the state indicator fully visible. Values outside the
@@ -545,6 +550,14 @@ internal sealed class DalamudConfiguration : IInternalDisposableService
     /// </summary>
     public bool ShowBadgesOnTitleScreen { get; set; } = true;
 
+    /// <summary>Sets <see cref="DefaultFontSpec"/> from where Dalamud saved it before, unless it is set.</summary>
+    [JsonProperty("DefaultFontSpec")]
+    [SuppressMessage("ReSharper", "UnusedMember.Local", Justification = "JSON")]
+    private FontSpec? LegacyDefaultFontSpec
+    {
+        set => this.DefaultFontSpec ??= value;
+    }
+
     /// <summary>
     /// Load a configuration from the provided path.
     /// </summary>
@@ -560,8 +573,7 @@ internal sealed class DalamudConfiguration : IInternalDisposableService
             await fs.ReadAllTextAsync(path, text =>
             {
                 // If this reads as null, the file was empty, that's no good
-                deserialized = JsonConvert.DeserializeObject<DalamudConfiguration>(text, SerializerSettings)
-                    ?? throw new Exception("Read config was null.");
+                deserialized = Deserialize(text) ?? throw new Exception("Read config was null.");
             });
         }
         catch (FileNotFoundException)
@@ -617,6 +629,18 @@ internal sealed class DalamudConfiguration : IInternalDisposableService
         this.writeTask?.Wait();
     }
 
+    /// <summary>Reads a configuration from JSON.</summary>
+    /// <param name="text">The JSON.</param>
+    /// <returns>The configuration, or null if the JSON is null.</returns>
+    internal static DalamudConfiguration? Deserialize(string text) =>
+        JsonConvert.DeserializeObject<DalamudConfiguration>(text, SerializerSettings);
+
+    /// <summary>Writes a configuration as JSON.</summary>
+    /// <param name="configuration">The configuration.</param>
+    /// <returns>The JSON.</returns>
+    internal static string Serialize(DalamudConfiguration configuration) =>
+        JsonConvert.SerializeObject(configuration, SerializerSettings);
+
     /// <summary>
     /// Save the file, if needed. Only needs to be done once a frame.
     /// </summary>
@@ -627,6 +651,20 @@ internal sealed class DalamudConfiguration : IInternalDisposableService
             this.Save();
             this.isSaveQueued = false;
         }
+    }
+
+    // A default font that cannot be read or written, such as one saved by a later version, is left out. Without this,
+    // the whole configuration would be.
+    private static void SkipDefaultFontError(object? sender, Newtonsoft.Json.Serialization.ErrorEventArgs e)
+    {
+        if (e.CurrentObject is not DalamudConfiguration
+            || e.ErrorContext.Path?.StartsWith("DefaultFont", StringComparison.Ordinal) is not true)
+        {
+            return;
+        }
+
+        Log.Error(e.ErrorContext.Error, "Leaving out the default font at {Path}", e.ErrorContext.Path);
+        e.ErrorContext.Handled = true;
     }
 
     private void SetDefaults()
@@ -686,7 +724,7 @@ internal sealed class DalamudConfiguration : IInternalDisposableService
         {
             await Service<ReliableFileStorage>.Get().WriteAllTextAsync(
                                                    this.configPath,
-                                                   JsonConvert.SerializeObject(this, SerializerSettings));
+                                                   Serialize(this));
             Log.Verbose("Configuration saved");
         }).ContinueWith(t =>
         {

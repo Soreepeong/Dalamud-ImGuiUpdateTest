@@ -1,13 +1,9 @@
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 
-using Dalamud.Utility;
+using Dalamud.Interface.Fonts.Internal;
 
 using Newtonsoft.Json;
-
-using TerraFX.Interop.DirectX;
-using TerraFX.Interop.Windows;
 
 namespace Dalamud.Interface.Fonts;
 
@@ -16,72 +12,57 @@ namespace Dalamud.Interface.Fonts;
 /// </summary>
 public sealed class SystemFontFamilyId : IFontFamilyId
 {
-    [JsonIgnore]
-    private IReadOnlyList<IFontId>? fontsLazy;
+    /// <summary>Initializes a new instance of the <see cref="SystemFontFamilyId"/> class.</summary>
+    /// <remarks>The family is looked up when a font of it loads.</remarks>
+    /// <param name="name">The family name, in any language the font has it in.</param>
+    internal SystemFontFamilyId(string name) => this.Name = new(name);
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="SystemFontFamilyId"/> class.
-    /// </summary>
-    /// <param name="englishName">The font name in English.</param>
-    /// <param name="localeNames">The localized font name for display purposes.</param>
+    /// <summary>Initializes a new instance of the <see cref="SystemFontFamilyId"/> class.</summary>
+    /// <param name="name">The name of the family.</param>
+    internal SystemFontFamilyId(LocalizedName name) => this.Name = name;
+
     [JsonConstructor]
-    internal SystemFontFamilyId(string englishName, IReadOnlyDictionary<string, string> localeNames)
-    {
-        this.EnglishName = englishName;
-        this.LocaleNames = localeNames;
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="SystemFontFamilyId"/> class.
-    /// </summary>
-    /// <param name="localeNames">The localized font name for display purposes.</param>
-    internal SystemFontFamilyId(IReadOnlyDictionary<string, string> localeNames)
-    {
-        if (localeNames.TryGetValue("en-us", out var name))
-            this.EnglishName = name;
-        else if (localeNames.TryGetValue("en", out name))
-            this.EnglishName = name;
-        else
-            this.EnglishName = localeNames.Values.First();
-        this.LocaleNames = localeNames;
-    }
-
-    /// <inheritdoc/>
-    [JsonProperty]
-    public string EnglishName { get; init; }
-
-    /// <inheritdoc/>
-    [JsonProperty]
-    public IReadOnlyDictionary<string, string>? LocaleNames { get; }
+    private SystemFontFamilyId(string? englishName, IReadOnlyDictionary<string, string>? localeNames) =>
+        this.Name = new(englishName ?? string.Empty, localeNames);
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public IReadOnlyList<IFontId> Fonts => this.fontsLazy ??= this.GetFonts();
+    public LocalizedName Name { get; }
+
+    /// <inheritdoc/>
+    [JsonIgnore]
+    [field: JsonIgnore]
+    public IReadOnlyList<IFontId> Fonts => field ??= DirectWriteUtilities.ListFaces(this);
+
+    /// <summary>Gets the English name of <see cref="Name"/>, as saved.</summary>
+    [JsonProperty("EnglishName")]
+    private string SavedEnglishName => this.Name.English;
+
+    /// <summary>Gets the translations of <see cref="Name"/>, as saved.</summary>
+    [JsonProperty("LocaleNames")]
+    private IReadOnlyDictionary<string, string>? SavedLocaleNames => this.Name.ByLocale;
 
     public static bool operator ==(SystemFontFamilyId? left, SystemFontFamilyId? right) => Equals(left, right);
 
     public static bool operator !=(SystemFontFamilyId? left, SystemFontFamilyId? right) => !Equals(left, right);
 
     /// <inheritdoc/>
-    public int FindBestMatch(int weight, int stretch, int style)
+    public int FindBestMatch(FontStyle style)
     {
-        using var matchingFont = default(ComPtr<IDWriteFont>);
-
+        var (weight, stretch, italic) = (style.EffectiveWeight, style.EffectiveStretch, style.Italicized);
         var candidates = this.Fonts.ToList();
         var minGap = int.MaxValue;
         foreach (var c in candidates)
-            minGap = Math.Min(minGap, Math.Abs(c.Weight - weight));
-        candidates.RemoveAll(c => Math.Abs(c.Weight - weight) != minGap);
+            minGap = Math.Min(minGap, Math.Abs(c.Style.EffectiveWeight - weight));
+        candidates.RemoveAll(c => Math.Abs(c.Style.EffectiveWeight - weight) != minGap);
 
         minGap = int.MaxValue;
         foreach (var c in candidates)
-            minGap = Math.Min(minGap, Math.Abs(c.Stretch - stretch));
-        candidates.RemoveAll(c => Math.Abs(c.Stretch - stretch) != minGap);
+            minGap = Math.Min(minGap, Math.Abs(c.Style.EffectiveStretch - stretch));
+        candidates.RemoveAll(c => Math.Abs(c.Style.EffectiveStretch - stretch) != minGap);
 
-        if (candidates.Any(x => x.Style == style))
-            candidates.RemoveAll(x => x.Style != style);
-        else if (candidates.Any(x => x.Style == (int)DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_NORMAL))
-            candidates.RemoveAll(x => x.Style != (int)DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_NORMAL);
+        if (candidates.Any(x => x.Style.Italicized == italic))
+            candidates.RemoveAll(x => x.Style.Italicized != italic);
 
         if (candidates.Count == 0)
             return 0;
@@ -96,86 +77,16 @@ public sealed class SystemFontFamilyId : IFontFamilyId
     }
 
     /// <inheritdoc/>
-    public override string ToString() => $"{nameof(SystemFontFamilyId)}:{this.EnglishName}";
+    public override string ToString() => $"{nameof(SystemFontFamilyId)}:{this.Name.English}";
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) =>
         ReferenceEquals(this, obj) || (obj is SystemFontFamilyId other && this.Equals(other));
 
     /// <inheritdoc/>
-    public override int GetHashCode() => this.EnglishName.GetHashCode();
+    public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(this.Name.English);
 
-    /// <summary>
-    /// Create a new instance of <see cref="SystemFontFamilyId"/> from an <see cref="IDWriteFontFamily"/>.
-    /// </summary>
-    /// <param name="family">The family.</param>
-    /// <returns>The new instance.</returns>
-    internal static unsafe SystemFontFamilyId FromDWriteFamily(ComPtr<IDWriteFontFamily> family)
-    {
-        using var fn = default(ComPtr<IDWriteLocalizedStrings>);
-        family.Get()->GetFamilyNames(fn.GetAddressOf()).ThrowOnError();
-        return new(IObjectWithLocalizableName.GetLocaleNames(fn));
-    }
-
-    private unsafe List<IFontId> GetFonts()
-    {
-        using var dwf = default(ComPtr<IDWriteFactory>);
-        fixed (Guid* piid = &IID.IID_IDWriteFactory)
-        {
-            DirectX.DWriteCreateFactory(
-                DWRITE_FACTORY_TYPE.DWRITE_FACTORY_TYPE_SHARED,
-                piid,
-                (IUnknown**)dwf.GetAddressOf()).ThrowOnError();
-        }
-
-        using var sfc = default(ComPtr<IDWriteFontCollection>);
-        dwf.Get()->GetSystemFontCollection(sfc.GetAddressOf(), false).ThrowOnError();
-
-        var familyIndex = 0u;
-        BOOL exists = false;
-        fixed (char* pName = this.EnglishName)
-            sfc.Get()->FindFamilyName(pName, &familyIndex, &exists).ThrowOnError();
-        if (!exists)
-            throw new FileNotFoundException($"Font \"{this.EnglishName}\" not found.");
-
-        using var family = default(ComPtr<IDWriteFontFamily>);
-        sfc.Get()->GetFontFamily(familyIndex, family.GetAddressOf()).ThrowOnError();
-
-        var fontCount = (int)family.Get()->GetFontCount();
-        var fonts = new List<IFontId>(fontCount);
-        for (var i = 0; i < fontCount; i++)
-        {
-            using var font = default(ComPtr<IDWriteFont>);
-            if (family.Get()->GetFont((uint)i, font.GetAddressOf()).FAILED)
-            {
-                // Ignore errors, if any
-                continue;
-            }
-
-            if (font.Get()->GetSimulations() != DWRITE_FONT_SIMULATIONS.DWRITE_FONT_SIMULATIONS_NONE)
-            {
-                // No simulation support
-                continue;
-            }
-
-            fonts.Add(new SystemFontId(this, font));
-        }
-
-        fonts.Sort(
-            (a, b) =>
-            {
-                var comp = a.Weight.CompareTo(b.Weight);
-                if (comp != 0)
-                    return comp;
-
-                comp = a.Stretch.CompareTo(b.Stretch);
-                if (comp != 0)
-                    return comp;
-
-                return a.Style.CompareTo(b.Style);
-            });
-        return fonts;
-    }
-
-    private bool Equals(SystemFontFamilyId other) => this.EnglishName == other.EnglishName;
+    // Windows finds families by name without case. Names in another language than English make another id.
+    private bool Equals(SystemFontFamilyId other) =>
+        string.Equals(this.Name.English, other.Name.English, StringComparison.OrdinalIgnoreCase);
 }
