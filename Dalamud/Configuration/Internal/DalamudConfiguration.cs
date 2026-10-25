@@ -178,6 +178,11 @@ internal sealed class DalamudConfiguration : IInternalDisposableService
     [JsonProperty("DefaultFont")]
     public FontSpec? DefaultFontSpec { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether text is drawn with subpixel rendering, where ClearType is on.
+    /// </summary>
+    public bool UseSubpixelRendering { get; set; }
+
     /// <summary>Gets or sets the opacity of the IME state indicator.</summary>
     /// <value>0 will hide the state indicator. 1 will make the state indicator fully visible. Values outside the
     /// range will be clamped to [0, 1].</value>

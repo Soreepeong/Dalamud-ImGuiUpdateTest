@@ -593,7 +593,7 @@ internal sealed unsafe class DalamudIme : IInternalDisposableService
         var drawCand = ime.candidateStrings.Count != 0;
         var drawConv = drawCand || ime.ShowPartialConversion;
         var drawIme = ime.inputModeIcon != 0;
-        var imeIconFont = InterfaceManager.DefaultFont;
+        ImFontPtr imeIconFont = InterfaceManager.DefaultFont;
         var imeIconFontSize = ImGui.GetFontSize();
 
         var pad = ImGui.GetStyle().WindowPadding;

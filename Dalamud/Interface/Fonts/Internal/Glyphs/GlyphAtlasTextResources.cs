@@ -24,12 +24,18 @@ internal static unsafe class GlyphAtlasTextResources
     /// <li>The glyph budget starts again, and synchronous scopes left open end.</li>
     /// <li>The atlas retires and frees slices not used lately.</li>
     /// <li><see cref="FontClock.Frame"/> counts the frame.</li>
+    /// <li>Fonts nobody holds or used lately are released.</li>
     /// </ul></remarks>
-    public static void OnFrameRendered()
+    /// <param name="resolver">The resolver whose fonts to release, or null if there is none yet.</param>
+    public static void OnFrameRendered(FontResolver? resolver)
     {
+        // The steps of the atlas and the clock never throw. They go first, so that a throw after them does not stop
+        // the atlas from retiring slices.
         GlyphRasterBudget.EndFrame();
         GlyphAtlas.Shared.EndFrame();
         FontClock.Advance();
+        resolver?.OnFrameRendered();
+        FontProfiler.EndFrame();
     }
 
     /// <summary>Makes the queued glyph changes, and gets the glyph texture arrays to bind.</summary>
