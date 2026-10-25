@@ -99,8 +99,29 @@ internal sealed partial class TextureManager
                             Format = DXGI_FORMAT.DXGI_FORMAT_R8G8B8A8_UNORM,
                             AlignedByteOffset = uint.MaxValue,
                         },
+                        new()
+                        {
+                            SemanticName = (sbyte*)pszTexCoord,
+                            SemanticIndex = 1,
+                            Format = DXGI_FORMAT.DXGI_FORMAT_R32G32B32A32_UINT,
+                            AlignedByteOffset = uint.MaxValue,
+                        },
+                        new()
+                        {
+                            SemanticName = (sbyte*)pszTexCoord,
+                            SemanticIndex = 2,
+                            Format = DXGI_FORMAT.DXGI_FORMAT_R32G32B32A32_UINT,
+                            AlignedByteOffset = uint.MaxValue,
+                        },
+                        new()
+                        {
+                            SemanticName = (sbyte*)pszTexCoord,
+                            SemanticIndex = 3,
+                            Format = DXGI_FORMAT.DXGI_FORMAT_R32G32B32_UINT,
+                            AlignedByteOffset = uint.MaxValue,
+                        },
                     };
-                    device->CreateInputLayout(ied, 3, pArray, (nuint)stream.Length, ppInputLayout).ThrowOnError();
+                    device->CreateInputLayout(ied, 6, pArray, (nuint)stream.Length, ppInputLayout).ThrowOnError();
                 }
 
                 ArrayPool<byte>.Shared.Return(array);
@@ -142,8 +163,8 @@ internal sealed partial class TextureManager
                         e0 =
                         {
                             BlendEnable = true,
-                            SrcBlend = D3D11_BLEND.D3D11_BLEND_SRC_ALPHA,
-                            DestBlend = D3D11_BLEND.D3D11_BLEND_INV_SRC_ALPHA,
+                            SrcBlend = D3D11_BLEND.D3D11_BLEND_ONE,
+                            DestBlend = D3D11_BLEND.D3D11_BLEND_INV_SRC1_COLOR,
                             BlendOp = D3D11_BLEND_OP.D3D11_BLEND_OP_ADD,
                             SrcBlendAlpha = D3D11_BLEND.D3D11_BLEND_INV_DEST_ALPHA,
                             DestBlendAlpha = D3D11_BLEND.D3D11_BLEND_ONE,

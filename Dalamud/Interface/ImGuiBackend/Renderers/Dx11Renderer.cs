@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Fonts.Internal.Glyphs;
 using Dalamud.Interface.ImGuiBackend.Helpers.D3D11;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Textures.TextureWraps;
@@ -47,7 +48,9 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
     private ComPtr<ID3D11SamplerState> sampler;
     private ComPtr<ID3D11InputLayout> inputLayout;
     private ComPtr<ID3D11Buffer> vertexConstantBuffer;
+    private ComPtr<ID3D11Buffer> textConstantBuffer;
     private ComPtr<ID3D11BlendState> blendState;
+    private ComPtr<ID3D11BlendState> userCallbackBlendState;
     private ComPtr<ID3D11RasterizerState> rasterizerState;
     private ComPtr<ID3D11DepthStencilState> depthStencilState;
     private ComPtr<ID3D11Buffer> vertexBuffer;
@@ -310,7 +313,8 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
         using var oldState = new D3D11DeviceContextStateBackup(this.featureLevel, this.context.Get());
 
         // Setup desired DX state
-        this.SetupRenderState(drawData);
+        var glyphs = GlyphAtlasTextResources.Upload(this.context);
+        this.SetupRenderState(drawData, glyphs);
 
         try
         {
@@ -361,12 +365,36 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
                 drawData.DisplayPos.Y,
                 1f,
                 0f);
+
+            // As the monitor the viewport is on wants.
+            var textData = default(D3D11_MAPPED_SUBRESOURCE);
+            this.context.Get()->Map(
+                (ID3D11Resource*)this.textConstantBuffer.Get(),
+                0,
+                D3D11_MAP.D3D11_MAP_WRITE_DISCARD,
+                0,
+                &textData).ThrowOnError();
+            var owner = drawData.OwnerViewport;
+            var hWnd = owner.IsNull ? null : owner.Handle->PlatformHandleRaw;
+            if (hWnd is null && !owner.IsNull)
+                hWnd = owner.Handle->PlatformHandle;
+            var monitor = GlyphAtlasTextResources.GetShaderSettings((HWND)hWnd);
+            *(TextConstants*)textData.pData = new()
+            {
+                GammaRatios = monitor.GammaRatios,
+                EnhancedContrast = monitor.EnhancedContrast,
+                ClearTypeLevel = monitor.ClearTypeLevel,
+                SubpixelAllowed = !clearRenderTarget && monitor.Subpixel ? 1 : 0,
+                GrayscaleEnhancedContrast = monitor.GrayscaleEnhancedContrast,
+                Bgr = monitor.Bgr ? 1 : 0,
+            };
         }
         finally
         {
             this.context.Get()->Unmap((ID3D11Resource*)this.vertexBuffer.Get(), 0);
             this.context.Get()->Unmap((ID3D11Resource*)this.indexBuffer.Get(), 0);
             this.context.Get()->Unmap((ID3D11Resource*)this.vertexConstantBuffer.Get(), 0);
+            this.context.Get()->Unmap((ID3D11Resource*)this.textConstantBuffer.Get(), 0);
         }
 
         // Render command lists
@@ -407,7 +435,7 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
                     case ImDrawCallbackEnum.ResetRenderState:
                     {
                         // Special callback value used by the user to request the renderer to reset render state.
-                        this.SetupRenderState(drawData);
+                        this.SetupRenderState(drawData, glyphs);
                         break;
                     }
 
@@ -613,13 +641,22 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
                             this.context.Get()->PSSetSamplers(1, 1, &nullSampler);
 
                             // Restore full ImGui render state for subsequent draw commands in this frame
-                            this.SetupRenderState(drawData);
+                            this.SetupRenderState(drawData, glyphs);
                             break;
                         }
 
                         // User callback, registered via ImDrawList::AddCallback()
+                        var userBlendColor = default(Vector4);
+                        this.context.Get()->OMSetBlendState(
+                            this.userCallbackBlendState,
+                            (float*)&userBlendColor,
+                            0xffffffff);
                         var userCb = (delegate* unmanaged<ImDrawListPtr, ImDrawCmdPtr, void>)cmd.UserCallback;
                         userCb(cmdList, (ImDrawCmdPtr)Unsafe.AsPointer(ref cmd));
+
+                        // The callback may have bound its own b0, t1 or t2, or grown the atlas by drawing to a texture.
+                        glyphs = GlyphAtlasTextResources.Upload(this.context);
+                        this.RestoreTextState(glyphs);
                         break;
                     }
                 }
@@ -804,7 +841,8 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
     /// Initializes the device context's render state to what we would use for rendering ImGui by default.
     /// </summary>
     /// <param name="drawData">The relevant ImGui draw data.</param>
-    private void SetupRenderState(ImDrawDataPtr drawData)
+    /// <param name="glyphs">The glyph arrays from <see cref="GlyphAtlasTextResources.Upload"/>.</param>
+    private void SetupRenderState(ImDrawDataPtr drawData, (nint Coverage, nint Color) glyphs)
     {
         var ctx = this.context.Get();
         ctx->IASetInputLayout(this.inputLayout);
@@ -819,8 +857,6 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
         ctx->RSSetState(this.rasterizerState);
         ctx->RSSetViewports(1, &viewport);
 
-        var blendColor = default(Vector4);
-        ctx->OMSetBlendState(this.blendState, (float*)&blendColor, 0xffffffff);
         ctx->OMSetDepthStencilState(this.depthStencilState, 0);
 
         ctx->VSSetShader(this.vertexShader.Get(), null, 0);
@@ -829,11 +865,29 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
 
         ctx->PSSetShader(this.pixelShader, null, 0);
         ctx->PSSetSamplers(0, 1, this.sampler.GetAddressOf());
+        this.RestoreTextState(glyphs);
 
         ctx->GSSetShader(null, null, 0);
         ctx->HSSetShader(null, null, 0);
         ctx->DSSetShader(null, null, 0);
         ctx->CSSetShader(null, null, 0);
+    }
+
+    /// <summary>Binds the blend state, and the constants and glyph arrays of the text pixel shader.</summary>
+    /// <param name="glyphs">The glyph arrays from <see cref="GlyphAtlasTextResources.Upload"/>.</param>
+    private void RestoreTextState((nint Coverage, nint Color) glyphs)
+    {
+        var ctx = this.context.Get();
+        var blendColor = default(Vector4);
+        ctx->OMSetBlendState(this.blendState, (float*)&blendColor, 0xffffffff);
+        var buffer = this.textConstantBuffer.Get();
+        ctx->PSSetConstantBuffers(0, 1, &buffer);
+        var views = stackalloc ID3D11ShaderResourceView*[2]
+        {
+            (ID3D11ShaderResourceView*)glyphs.Coverage,
+            (ID3D11ShaderResourceView*)glyphs.Color,
+        };
+        ctx->PSSetShaderResources(1, 2, views);
     }
 
     /// <summary>
@@ -881,8 +935,29 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
                         Format = DXGI_FORMAT.DXGI_FORMAT_R8G8B8A8_UNORM,
                         AlignedByteOffset = uint.MaxValue,
                     },
+                    new()
+                    {
+                        SemanticName = (sbyte*)pszTexCoord,
+                        SemanticIndex = 1,
+                        Format = DXGI_FORMAT.DXGI_FORMAT_R32G32B32A32_UINT,
+                        AlignedByteOffset = uint.MaxValue,
+                    },
+                    new()
+                    {
+                        SemanticName = (sbyte*)pszTexCoord,
+                        SemanticIndex = 2,
+                        Format = DXGI_FORMAT.DXGI_FORMAT_R32G32B32A32_UINT,
+                        AlignedByteOffset = uint.MaxValue,
+                    },
+                    new()
+                    {
+                        SemanticName = (sbyte*)pszTexCoord,
+                        SemanticIndex = 3,
+                        Format = DXGI_FORMAT.DXGI_FORMAT_R32G32B32_UINT,
+                        AlignedByteOffset = uint.MaxValue,
+                    },
                 };
-                this.device.Get()->CreateInputLayout(ied, 3, pArray, (nuint)stream.Length, ppInputLayout)
+                this.device.Get()->CreateInputLayout(ied, 6, pArray, (nuint)stream.Length, ppInputLayout)
                     .ThrowOnError();
             }
 
@@ -953,8 +1028,42 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
                 this.device.Get()->CreateBuffer(&bufferDesc, null, ppBuffer).ThrowOnError();
         }
 
+        if (this.textConstantBuffer.IsEmpty())
+        {
+            var bufferDesc = new D3D11_BUFFER_DESC(
+                (uint)sizeof(TextConstants),
+                (uint)D3D11_BIND_FLAG.D3D11_BIND_CONSTANT_BUFFER,
+                D3D11_USAGE.D3D11_USAGE_DYNAMIC,
+                (uint)D3D11_CPU_ACCESS_FLAG.D3D11_CPU_ACCESS_WRITE);
+            fixed (ID3D11Buffer** ppBuffer = &this.textConstantBuffer.GetPinnableReference())
+                this.device.Get()->CreateBuffer(&bufferDesc, null, ppBuffer).ThrowOnError();
+        }
+
         // Create the blending setup
         if (this.blendState.IsEmpty())
+        {
+            var blendStateDesc = new D3D11_BLEND_DESC
+            {
+                RenderTarget =
+                {
+                    e0 =
+                    {
+                        BlendEnable = true,
+                        SrcBlend = D3D11_BLEND.D3D11_BLEND_ONE,
+                        DestBlend = D3D11_BLEND.D3D11_BLEND_INV_SRC1_COLOR,
+                        BlendOp = D3D11_BLEND_OP.D3D11_BLEND_OP_ADD,
+                        SrcBlendAlpha = D3D11_BLEND.D3D11_BLEND_INV_DEST_ALPHA,
+                        DestBlendAlpha = D3D11_BLEND.D3D11_BLEND_ONE,
+                        BlendOpAlpha = D3D11_BLEND_OP.D3D11_BLEND_OP_ADD,
+                        RenderTargetWriteMask = (byte)D3D11_COLOR_WRITE_ENABLE.D3D11_COLOR_WRITE_ENABLE_ALL,
+                    },
+                },
+            };
+            fixed (ID3D11BlendState** ppBlendState = &this.blendState.GetPinnableReference())
+                this.device.Get()->CreateBlendState(&blendStateDesc, ppBlendState).ThrowOnError();
+        }
+
+        if (this.userCallbackBlendState.IsEmpty())
         {
             var blendStateDesc = new D3D11_BLEND_DESC
             {
@@ -973,7 +1082,7 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
                     },
                 },
             };
-            fixed (ID3D11BlendState** ppBlendState = &this.blendState.GetPinnableReference())
+            fixed (ID3D11BlendState** ppBlendState = &this.userCallbackBlendState.GetPinnableReference())
                 this.device.Get()->CreateBlendState(&blendStateDesc, ppBlendState).ThrowOnError();
         }
 
@@ -1205,7 +1314,9 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
         this.sampler.Reset();
         this.inputLayout.Reset();
         this.vertexConstantBuffer.Reset();
+        this.textConstantBuffer.Reset();
         this.blendState.Reset();
+        this.userCallbackBlendState.Reset();
         this.rasterizerState.Reset();
         this.depthStencilState.Reset();
         this.vertexBuffer.Reset();
@@ -1231,5 +1342,19 @@ internal unsafe partial class Dx11Renderer : IImGuiRenderer
         this.blurNoiseTexture.Reset();
         this.blurNoiseSrv.Reset();
         this.dcompDevice.Reset();
+    }
+
+    /// <summary>The constant buffer b0 of the pixel shader. It matches <c>TextBuffer</c> in imgui-frag.hlsl.</summary>
+    /// <remarks><see cref="Padding"/> makes the size 48, a multiple of 16.</remarks>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TextConstants
+    {
+        public Vector4 GammaRatios;
+        public float EnhancedContrast;
+        public float ClearTypeLevel;
+        public float SubpixelAllowed;
+        public float GrayscaleEnhancedContrast;
+        public float Bgr;
+        public Vector3 Padding;
     }
 }

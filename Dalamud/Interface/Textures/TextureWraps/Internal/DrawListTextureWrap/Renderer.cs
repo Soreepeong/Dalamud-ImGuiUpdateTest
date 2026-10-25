@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Fonts.Internal.Glyphs;
 using Dalamud.Interface.Internal;
 using Dalamud.Interface.Utility;
 using Dalamud.Utility;
@@ -207,7 +208,15 @@ internal sealed unsafe partial class DrawListTextureWrap
                 buffer = this.drawToPremulVertexConstantBuffer.Get();
                 this.deviceContext.Get()->VSSetConstantBuffers(0, 1, &buffer);
 
-                // PS handled later
+                var (coverage, color) = GlyphAtlasTextResources.Upload(this.deviceContext);
+                var glyphs = stackalloc ID3D11ShaderResourceView*[2]
+                {
+                    (ID3D11ShaderResourceView*)coverage,
+                    (ID3D11ShaderResourceView*)color,
+                };
+
+                // The pixel shader and t0 are set per draw below.
+                this.deviceContext.Get()->PSSetShaderResources(1, 2, glyphs);
 
                 this.deviceContext.Get()->GSSetShader(null, null, 0);
                 this.deviceContext.Get()->HSSetShader(null, null, 0);
@@ -355,10 +364,24 @@ internal sealed unsafe partial class DrawListTextureWrap
                             Format = DXGI_FORMAT.DXGI_FORMAT_R8G8B8A8_UNORM,
                             AlignedByteOffset = uint.MaxValue,
                         },
+                        new()
+                        {
+                            SemanticName = (sbyte*)pszTexCoord,
+                            SemanticIndex = 1,
+                            Format = DXGI_FORMAT.DXGI_FORMAT_R32G32B32A32_UINT,
+                            AlignedByteOffset = uint.MaxValue,
+                        },
+                        new()
+                        {
+                            SemanticName = (sbyte*)pszTexCoord,
+                            SemanticIndex = 2,
+                            Format = DXGI_FORMAT.DXGI_FORMAT_R32G32B32A32_UINT,
+                            AlignedByteOffset = uint.MaxValue,
+                        },
                     };
                     this.device.Get()->CreateInputLayout(
                             ied,
-                            3,
+                            5,
                             pArray,
                             (nuint)stream.Length,
                             tempInputLayout.GetAddressOf())
