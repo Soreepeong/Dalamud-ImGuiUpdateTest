@@ -41,6 +41,7 @@ internal class DataWindow : Window, IDisposable
         new FateTableWidget(),
         new FlyTextWidget(),
         new FontAwesomeTestWidget(),
+        new FontSamplesImGuiWidget(),
         new GameInventoryTestWidget(),
         new GamepadWidget(),
         new GaugeWidget(),
