@@ -1,8 +1,7 @@
 using System.Numerics;
 
 using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.ImGuiSeStringRenderer;
-using Dalamud.Interface.Utility;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.Utility.Raii;
 
 using FFXIVClientStructs.FFXIV.Client.System.String;
@@ -51,15 +50,16 @@ internal unsafe partial class TextNodeTree : ResNodeTree
 
         try
         {
-            var style = new SeStringDrawParams
+            var hasEdge = (this.TxtNode->TextFlags & TextFlags.Edge) != 0;
+            using (ImGui.PushTextStyle(
+                       new()
+                       {
+                           Color = this.TxtNode->TextColor.RGBA,
+                           Edge = new(hasEdge ? this.TxtNode->EdgeColor.RGBA : 0),
+                       }))
             {
-                Color = this.TxtNode->TextColor.RGBA,
-                EdgeColor = this.TxtNode->EdgeColor.RGBA,
-                ForceEdgeColor = true,
-                EdgeStrength = 1f,
-            };
-
-            ImGuiHelpers.SeStringWrapped(this.NodeText.AsSpan(), style);
+                ImGui.TextSeString(this.NodeText.AsSpan(), SeStringCallbacks.IgnoreEdgeColor, true);
+            }
         }
         catch
         {

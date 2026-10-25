@@ -7,13 +7,13 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Configuration.Internal;
 using Dalamud.Game.ClientState.GamePad;
 using Dalamud.Interface.Colors;
+using Dalamud.Interface.Fonts.Internal;
+using Dalamud.Interface.Fonts.Internal.Glyphs;
 using Dalamud.Interface.Internal.DesignSystem;
 using Dalamud.Interface.Internal.Windows.Settings.Tabs;
-using Dalamud.Interface.ManagedFontAtlas.Internals;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
-using Dalamud.Utility;
 
 namespace Dalamud.Interface.Internal.Windows.Settings;
 
@@ -112,12 +112,14 @@ internal sealed class SettingsWindow : Window
     {
         var configuration = Service<DalamudConfiguration>.Get();
         var interfaceManager = Service<InterfaceManager>.Get();
-        var fontAtlasFactory = Service<FontAtlasFactory>.Get();
+        var fontFactory = Service<FontFactory>.Get();
         var localization = Service<Localization>.Get();
 
+        // ImGui scales the fonts as they are pushed, so the scale alone does not make them again.
         var scaleChanged = !Equals(ImGui.GetStyle().FontScaleMain, configuration.GlobalUiScale);
-        var rebuildFont = !Equals(fontAtlasFactory.DefaultFontSpec, configuration.DefaultFontSpec);
-        rebuildFont |= scaleChanged;
+        var rebuildFont = !Equals(
+                              fontFactory.DefaultFontSpec,
+                              configuration.DefaultFontSpec ?? FontFactory.BuiltInDefaultFontSpec);
 
         ImGui.GetStyle().FontScaleMain = configuration.GlobalUiScale;
         if (scaleChanged)
@@ -125,13 +127,11 @@ internal sealed class SettingsWindow : Window
             interfaceManager.InvokeGlobalScaleChanged();
         }
 
-        fontAtlasFactory.DefaultFontSpecOverride = null;
+        fontFactory.DefaultFontSpecOverride = null;
+        SubpixelSettings.Override = null;
 
         if (rebuildFont)
-        {
             interfaceManager.RebuildFonts();
-            interfaceManager.InvokeFontChanged();
-        }
 
         foreach (var settingsTab in this.tabs)
         {
@@ -305,9 +305,9 @@ internal sealed class SettingsWindow : Window
             ImGui.GetIO().ConfigNavMoveSetMousePos = true;
         }
 
+        // Fonts are not made again here. A chosen default font is used from when it is chosen, and a new language
+        // raises LocalizationChanged.
         configuration.QueueSave();
-
-        Service<InterfaceManager>.Get().RebuildFonts();
     }
 
     private void OnLocalizationChanged(string langCode)

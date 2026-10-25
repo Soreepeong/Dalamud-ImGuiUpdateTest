@@ -12,6 +12,7 @@ using Dalamud.Game.ClientState;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.Evaluator;
 using Dalamud.Game.Text.Noun.Enums;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
@@ -832,7 +833,7 @@ internal class SeStringCreatorWidget : IDataWindowWidget
 
         ImGui.Dummy(new Vector2(0, ImGui.GetTextLineHeight()));
         ImGui.SameLine(0, 0);
-        ImGuiHelpers.SeStringWrapped(str);
+        ImGui.TextSeString(str, wrap: true);
     }
 
     private void DrawParameters()
@@ -898,10 +899,7 @@ internal class SeStringCreatorWidget : IDataWindowWidget
 
         if (!asTreeNode && renderSeString)
         {
-            ImGuiHelpers.SeStringWrapped(rosss, new()
-            {
-                ForceEdgeColor = true,
-            });
+            ImGui.TextSeString(rosss, SeStringCallbacks.IgnoreEdgeColor, true);
         }
 
         var payloadIdx = -1;
@@ -998,7 +996,7 @@ internal class SeStringCreatorWidget : IDataWindowWidget
 
                 using var rssb = new RentedSeStringBuilder();
                 rssb.Builder.AppendIcon(iconId);
-                ImGuiHelpers.SeStringWrapped(rssb.Builder.ToArray());
+                ImGui.TextSeString(rssb, wrap: true);
 
                 ImGui.SameLine();
             }
@@ -1264,11 +1262,7 @@ internal class SeStringCreatorWidget : IDataWindowWidget
         using var titleColor = ImRaii.PushColor(ImGuiCol.Text, color);
         var node = ImRaii.TreeNode("##" + id, flags);
         ImGui.SameLine();
-        ImGuiHelpers.SeStringWrapped(previewText, new()
-        {
-            ForceEdgeColor = true,
-            WrapWidth = 9999,
-        });
+        ImGui.TextSeString(previewText, SeStringCallbacks.IgnoreEdgeColor);
         return node;
     }
 

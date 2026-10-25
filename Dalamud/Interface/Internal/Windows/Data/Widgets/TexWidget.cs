@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Configuration.Internal;
 using Dalamud.Interface.Components;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Interface.ImGuiNotification.Internal;
 using Dalamud.Interface.Textures;
@@ -395,8 +396,6 @@ internal class TexWidget : IDataWindowWidget
 
     private unsafe void DrawBlame(List<TextureManager.IBlameableDalamudTextureWrap> allBlames)
     {
-        var im = Service<InterfaceManager>.Get();
-
         var shouldSortAgain = ImGui.Button("Sort again"u8);
 
         ImGui.SameLine();
@@ -409,7 +408,7 @@ internal class TexWidget : IDataWindowWidget
 
         const int numIcons = 1;
         float iconWidths;
-        using (im.IconFontHandle?.Push())
+        using (InterfaceManager.IconFont.Push())
         {
             iconWidths = ImGui.CalcTextSize(FontAwesomeIcon.Save.ToIconString()).X;
         }
@@ -558,14 +557,13 @@ internal class TexWidget : IDataWindowWidget
 
     private void DrawLoadedTextures(ICollection<SharedImmediateTexture> textures)
     {
-        var im = Service<InterfaceManager>.Get();
         using var table = ImRaii.Table("##table"u8, 6);
         if (!table.Success)
             return;
 
         const int numIcons = 4;
         float iconWidths;
-        using (im.IconFontHandle?.Push())
+        using (InterfaceManager.IconFont.Push())
         {
             iconWidths = ImGui.CalcTextSize(FontAwesomeIcon.Save.ToIconString()).X;
             iconWidths += ImGui.CalcTextSize(FontAwesomeIcon.Sync.ToIconString()).X;

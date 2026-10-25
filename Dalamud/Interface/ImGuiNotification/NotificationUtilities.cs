@@ -4,11 +4,11 @@ using System.Runtime.CompilerServices;
 
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Text;
+using Dalamud.Interface.Fonts;
+using Dalamud.Interface.Fonts.Internal;
 using Dalamud.Interface.Internal.Windows;
-using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Textures.TextureWraps;
-using Dalamud.Interface.Utility;
 using Dalamud.Plugin.Internal.Types;
 using Dalamud.Storage.Assets;
 
@@ -32,45 +32,52 @@ public static class NotificationUtilities
     public static INotificationIcon ToNotificationIcon(this FileInfo fileInfo) =>
         INotificationIcon.FromFile(fileInfo.FullName);
 
-    /// <summary>Draws an icon from an <see cref="IFontHandle"/> and a <see cref="char"/>.</summary>
+    /// <summary>Draws an icon from a font and a <see cref="char"/>.</summary>
     /// <param name="minCoord">The coordinates of the top left of the icon area.</param>
     /// <param name="maxCoord">The coordinates of the bottom right of the icon area.</param>
     /// <param name="c">The icon character.</param>
-    /// <param name="fontHandle">The font handle to use.</param>
+    /// <param name="iconFont">The font to use.</param>
     /// <param name="color">The foreground color.</param>
     /// <returns><c>true</c> if anything has been drawn.</returns>
-    internal static unsafe bool DrawIconFrom(
+    internal static bool DrawIconFrom(
         Vector2 minCoord,
         Vector2 maxCoord,
         char c,
-        IFontHandle fontHandle,
+        ImFontRef iconFont,
         Vector4 color)
     {
         if (c is '\0' or char.MaxValue)
             return false;
 
         var smallerDim = Math.Max(maxCoord.Y - minCoord.Y, maxCoord.X - minCoord.X);
-        using (fontHandle.Push())
+        using (iconFont.Push())
         {
-            var font = ImGui.GetFont();
-            var glyphPtr = (ImGuiHelpers.ImFontGlyphReal*)font.FindGlyphNoFallback(c);
-            if (glyphPtr is null)
+            var font = ImGui.Font;
+            var glyph = font.GetGlyphIndex(c);
+            if (glyph == 0)
                 return false;
 
-            ref readonly var glyph = ref *glyphPtr;
-            var size = glyph.XY1 - glyph.XY0;
+            var drawList = ImGui.GetWindowDrawList();
+            ImGuiP.GetTextDesc(out var desc, drawList: drawList);
+            var fontSize = ImGui.GetFontSize();
+            font.GetGlyphMetrics(glyph, fontSize, desc.Density, out var metric);
+            var (bounds, size) = (metric.Bounds, metric.Size);
             var smallerSizeDim = Math.Min(size.X, size.Y);
             var scale = smallerSizeDim > smallerDim ? smallerDim / smallerSizeDim : 1f;
             size *= scale;
             var pos = ((minCoord + maxCoord) - size) / 2;
             pos += ImGui.GetWindowPos();
-            ImGui.GetWindowDrawList().AddImage(
-                font.ContainerAtlas.Textures[glyph.TextureIndex].TexID,
-                pos,
-                pos + size,
-                glyph.UV0,
-                glyph.UV1,
-                ImGui.GetColorU32(color with { W = color.W * ImGui.GetStyle().Alpha }));
+
+            // RenderChar takes the top of the line, and places the baseline in it as layouts do.
+            var drawSize = fontSize * scale;
+            var metrics = font.GetMetrics(drawSize, desc.Density);
+            var baseline = metrics.BaselineIn(metrics.BlockSize(desc.LineHeight, drawSize));
+            font.RenderChar(
+                drawList,
+                drawSize,
+                pos - new Vector2(bounds.X * scale, (bounds.Y * scale) + baseline),
+                ImGui.GetColorU32(color),
+                c);
         }
 
         return true;

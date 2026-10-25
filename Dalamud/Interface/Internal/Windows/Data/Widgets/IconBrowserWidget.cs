@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Colors;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.Textures.Internal;
 using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface.Utility;
@@ -192,7 +193,7 @@ public class IconBrowserWidget : IDataWindowWidget
         else if (exc is not null)
         {
             ImGui.Dummy(this.iconSize);
-            using (Service<InterfaceManager>.Get().IconFontHandle?.Push())
+            using (InterfaceManager.IconFont.Push())
             {
                 var iconText = FontAwesomeIcon.Ban.ToIconString();
                 var textSize = ImGui.CalcTextSize(iconText);

@@ -2,6 +2,7 @@ using System.Numerics;
 
 using Dalamud.Bindings.ImGui;
 using Dalamud.Configuration.Internal;
+using Dalamud.Interface.Fonts;
 using Dalamud.Interface.Internal;
 using Dalamud.Interface.Utility;
 using Dalamud.Utility;
@@ -336,7 +337,7 @@ internal sealed partial class ActiveNotification
         var windowSize = ImGui.GetWindowSize();
 
         var rtOffset = new Vector2(width, 0);
-        using (Service<InterfaceManager>.Get().IconFontHandle?.Push())
+        using (InterfaceManager.IconFont.Push())
         {
             ImGui.PushClipRect(windowPos, windowPos + windowSize with { Y = height }, false);
 
@@ -489,7 +490,7 @@ internal sealed partial class ActiveNotification
                 minCoord,
                 maxCoord,
                 this.Type.ToChar(),
-                Service<NotificationManager>.Get().IconFontAwesomeFontHandle,
+                NotificationManager.IconFontAwesomeFont,
                 iconColor))
             return;
 
