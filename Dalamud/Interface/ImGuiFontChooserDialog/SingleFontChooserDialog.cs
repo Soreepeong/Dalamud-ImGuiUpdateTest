@@ -1,32 +1,26 @@
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Dalamud.Bindings.ImGui;
-using Dalamud.Configuration.Internal;
 using Dalamud.Interface.Colors;
-using Dalamud.Interface.FontIdentifier;
-using Dalamud.Interface.ManagedFontAtlas;
-using Dalamud.Interface.ManagedFontAtlas.Internals;
+using Dalamud.Interface.Fonts;
+using Dalamud.Interface.Fonts.Internal;
+using Dalamud.Interface.Internal;
 using Dalamud.Interface.Utility;
 using Dalamud.Utility;
 
-using TerraFX.Interop.DirectX;
-using TerraFX.Interop.Windows;
+using Serilog;
 
 namespace Dalamud.Interface.ImGuiFontChooserDialog;
 
 /// <summary>
 /// A dialog for choosing a font and its size.
 /// </summary>
-[SuppressMessage(
-    "StyleCop.CSharp.LayoutRules",
-    "SA1519:Braces should not be omitted from multi-line child statement",
-    Justification = "Multiple fixed blocks")]
-public sealed class SingleFontChooserDialog : IDisposable
+public sealed partial class SingleFontChooserDialog : IDisposable
 {
     private const float MinFontSizePt = 1;
 
@@ -58,8 +52,9 @@ public sealed class SingleFontChooserDialog : IDisposable
 
     private readonly int counter;
     private readonly byte[] fontPreviewText = new byte[2048];
-    private readonly TaskCompletionSource<SingleFontSpec> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly IFontAtlas atlas;
+    private readonly FontPreviews previews = new();
+    private readonly Dictionary<IFontFamilyId, IFontId?> previewFonts = [];
+    private readonly TaskCompletionSource<FontSpec> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private string popupImGuiName;
     private string title;
@@ -69,20 +64,19 @@ public sealed class SingleFontChooserDialog : IDisposable
     private int setFocusOn = -1;
 
     private bool useAdvancedOptions;
-    private AdvancedOptionsUiState advUiState;
 
     private Task<List<IFontFamilyId>>? fontFamilies;
+    private List<IFontFamilyId>? appliedFamilies;
     private int selectedFamilyIndex = -1;
     private int selectedFontIndex = -1;
-    private int selectedFontWeight = (int)DWRITE_FONT_WEIGHT.DWRITE_FONT_WEIGHT_NORMAL;
-    private int selectedFontStretch = (int)DWRITE_FONT_STRETCH.DWRITE_FONT_STRETCH_NORMAL;
-    private int selectedFontStyle = (int)DWRITE_FONT_STYLE.DWRITE_FONT_STYLE_NORMAL;
+    private FontStyle selectedFontStyle;
 
     private string familySearch = string.Empty;
     private string fontSearch = string.Empty;
     private string fontSizeSearch = "12";
-    private IFontHandle? fontHandle;
-    private SingleFontSpec selectedFont;
+    private ImFontRef? requestedFont;
+    private ImFontRef? shownFont;
+    private FontSpec selectedFont;
 
     private bool popupPositionChanged;
     private bool popupSizeChanged;
@@ -90,50 +84,24 @@ public sealed class SingleFontChooserDialog : IDisposable
     private Vector2 popupSize = new(float.NaN);
 
     /// <summary>Initializes a new instance of the <see cref="SingleFontChooserDialog"/> class.</summary>
-    /// <param name="uiBuilder">The relevant instance of UiBuilder.</param>
-    /// <param name="isGlobalScaled">Whether the fonts in the atlas is global scaled.</param>
-    /// <param name="debugAtlasName">Atlas name for debugging purposes.</param>
-    /// <remarks>
-    /// <para>The passed <see cref="UiBuilder"/> is only used for creating a temporary font atlas. It will not
-    /// automatically register a hander for <see cref="UiBuilder.Draw"/>.</para>
-    /// <para>Consider using <see cref="CreateAuto"/> for automatic registration and unregistration of
-    /// <see cref="Draw"/> event handler in addition to automatic disposal of this class and the temporary font atlas
-    /// for this font chooser dialog.</para>
-    /// </remarks>
-    public SingleFontChooserDialog(UiBuilder uiBuilder, bool isGlobalScaled = true, string? debugAtlasName = null)
-        : this(uiBuilder.CreateFontAtlas(FontAtlasAutoRebuildMode.Async, isGlobalScaled, debugAtlasName))
-    {
-    }
-
-    /// <summary>Initializes a new instance of the <see cref="SingleFontChooserDialog"/> class.</summary>
-    /// <param name="factory">An instance of <see cref="FontAtlasFactory"/>.</param>
-    /// <param name="debugAtlasName">The temporary atlas name.</param>
-    internal SingleFontChooserDialog(FontAtlasFactory factory, string debugAtlasName)
-        : this(factory.CreateFontAtlas(debugAtlasName, FontAtlasAutoRebuildMode.Async))
-    {
-    }
-
-    /// <summary>Initializes a new instance of the <see cref="SingleFontChooserDialog"/> class.</summary>
-    /// <param name="newAsyncAtlas">A new instance of <see cref="IFontAtlas"/> created using
-    /// <see cref="FontAtlasAutoRebuildMode.Async"/> as its auto-rebuild mode.</param>
-    /// <remarks>The passed instance of <paramref see="newAsyncAtlas"/> will be disposed after use. If you pass an atlas
-    /// that is already being used, then all the font handles under the passed atlas will be invalidated upon disposing
-    /// this font chooser. Consider using <see cref="SingleFontChooserDialog(UiBuilder, bool, string?)"/> for automatic
-    /// handling of font atlas derived from a <see cref="UiBuilder"/>, or even <see cref="CreateAuto"/> for automatic
-    /// registration and unregistration of <see cref="Draw"/> event handler in addition to automatic disposal of this
-    /// class and the temporary font atlas for this font chooser dialog.</remarks>
-    private SingleFontChooserDialog(IFontAtlas newAsyncAtlas)
+    /// <remarks>Call <see cref="Draw"/> every frame, and <see cref="Dispose"/> once done, or use
+    /// <see cref="CreateAuto"/>, which does both.</remarks>
+    public SingleFontChooserDialog()
     {
         this.counter = Interlocked.Increment(ref counterStatic);
         this.title = "Choose a font...";
         this.popupImGuiName = $"{this.title}##{nameof(SingleFontChooserDialog)}[{this.counter}]";
-        this.atlas = newAsyncAtlas;
-        this.selectedFont = new() { FontId = DalamudDefaultFontAndFamilyId.Instance };
+        this.selectedFont = new()
+        {
+            FontId = DalamudDefaultFontAndFamilyId.Instance,
+            SizePx = InterfaceManager.DefaultFontSizePx,
+        };
         Encoding.UTF8.GetBytes("Font preview.\n0123456789!\n遍角次亮采之门，门上插刀、直字拐弯、天上平板、船顶漏雨。\n다람쥐 헌 쳇바퀴에 타고파", this.fontPreviewText);
     }
 
     /// <summary>Called when the selected font spec has changed.</summary>
-    public event Action<SingleFontSpec>? SelectedFontSpecChanged;
+    /// <remarks>It is raised from <see cref="Draw"/>, at the first call and after each change.</remarks>
+    public event Action<FontSpec>? SelectedFontSpecChanged;
 
     /// <summary>
     /// Gets or sets the title of this font chooser dialog popup.
@@ -160,37 +128,61 @@ public sealed class SingleFontChooserDialog : IDisposable
                        ? Encoding.UTF8.GetString(this.fontPreviewText)
                        : Encoding.UTF8.GetString(this.fontPreviewText, 0, n);
         }
-        set => Encoding.UTF8.GetBytes(value, this.fontPreviewText);
+
+        set
+        {
+            // The last byte stays 0. The encoder writes whole characters only.
+            Encoding.UTF8.GetEncoder().Convert(
+                value,
+                this.fontPreviewText.AsSpan(0, this.fontPreviewText.Length - 1),
+                true,
+                out _,
+                out var length,
+                out _);
+            this.fontPreviewText.AsSpan(length).Clear();
+        }
     }
 
     /// <summary>
     /// Gets the task that resolves upon choosing a font or cancellation.
     /// </summary>
-    public Task<SingleFontSpec> ResultTask => this.tcs.Task;
+    /// <remarks>The task is canceled on cancel. The spec has the fallbacks of <see cref="SelectedFont"/>, and none
+    /// if that was never set.</remarks>
+    public Task<FontSpec> ResultTask => this.tcs.Task;
 
     /// <summary>
     /// Gets or sets the selected family and font.
     /// </summary>
-    public SingleFontSpec SelectedFont
+    /// <remarks><ol>
+    /// <li>The dialog edits <see cref="FontSpec.FontId"/>. A spec without one gets the first font id of its
+    /// fallbacks, or the default font, and keeps its fallbacks.</li>
+    /// <li>A size that follows the current font size is taken at the default font size, as the dialog lists sizes in
+    /// points.</li>
+    /// </ol></remarks>
+    public FontSpec SelectedFont
     {
         get => this.selectedFont;
         set
         {
-            this.selectedFont = value;
+            if (value.SizePx <= 0)
+                value = value.WithSize(FontSizes.ToGlyphSize(value, Service<FontFactory>.Get().DefaultSizePx));
 
-            var familyName = value.FontId.Family.ToString() ?? string.Empty;
-            var fontName = value.FontId.ToString() ?? string.Empty;
-            this.familySearch = this.ExtractName(value.FontId.Family);
-            this.fontSearch = this.ExtractName(value.FontId);
+            var id = value.GetFirstFontId() ?? DalamudDefaultFontAndFamilyId.Instance;
+            this.selectedFont = value.FontId is null ? value with { FontId = id } : value;
+
+            var familyName = id.Family.ToString() ?? string.Empty;
+            var fontName = id.ToString() ?? string.Empty;
+            this.familySearch = this.ExtractName(id.Family.Name);
+            this.fontSearch = this.ExtractName(id.Name);
             if (this.fontFamilies?.IsCompletedSuccessfully is true)
                 this.UpdateSelectedFamilyAndFontIndices(this.fontFamilies.Result, familyName, fontName);
             this.fontSizeSearch = $"{value.SizePt:0.##}";
-            this.advUiState = new(value);
             this.useAdvancedOptions |= Math.Abs(value.LineHeight - 1f) > 0.000001;
             this.useAdvancedOptions |= value.GlyphOffset != default;
             this.useAdvancedOptions |= value.LetterSpacing != 0f;
 
-            this.SelectedFontSpecChanged?.Invoke(this.selectedFont);
+            // The next Draw loads it, and raises SelectedFontSpecChanged.
+            this.requestedFont = null;
         }
     }
 
@@ -245,24 +237,25 @@ public sealed class SingleFontChooserDialog : IDisposable
         }
     }
 
-    /// <summary>Creates a new instance of <see cref="SingleFontChooserDialog"/> that will automatically draw and
-    /// dispose itself as needed; calling <see cref="Draw"/> and <see cref="Dispose"/> are handled automatically.
-    /// </summary>
-    /// <param name="uiBuilder">An instance of <see cref="UiBuilder"/>.</param>
+    /// <summary>Creates a new instance of <see cref="SingleFontChooserDialog"/> that draws itself, and disposes itself
+    /// once closed.</summary>
+    /// <param name="uiBuilder">An instance of <see cref="IUiBuilder"/>.</param>
     /// <returns>The new instance of <see cref="SingleFontChooserDialog"/>.</returns>
-    public static SingleFontChooserDialog CreateAuto(UiBuilder uiBuilder)
+    public static SingleFontChooserDialog CreateAuto(IUiBuilder uiBuilder)
     {
-        var fcd = new SingleFontChooserDialog(uiBuilder);
-        uiBuilder.Draw += fcd.Draw;
-        fcd.tcs.Task.ContinueWith(
-            r =>
-            {
-                _ = r.Exception;
-                uiBuilder.Draw -= fcd.Draw;
-                fcd.Dispose();
-            });
-
+        var fcd = new SingleFontChooserDialog();
+        uiBuilder.Draw += DrawAndDispose;
         return fcd;
+
+        // Disposed in the frame it closed in, so that it is never drawn while disposed.
+        void DrawAndDispose()
+        {
+            fcd.Draw();
+            if (!fcd.tcs.Task.IsCompleted)
+                return;
+            uiBuilder.Draw -= DrawAndDispose;
+            fcd.Dispose();
+        }
     }
 
     /// <summary>Gets the default popup size before clamping to monitor work area.</summary>
@@ -274,18 +267,21 @@ public sealed class SingleFontChooserDialog : IDisposable
     }
 
     /// <inheritdoc/>
+    /// <remarks>Call it on the main thread, after the last <see cref="Draw"/>.</remarks>
     public void Dispose()
     {
-        this.fontHandle?.Dispose();
-        this.atlas.Dispose();
+        this.requestedFont = null;
+        this.shownFont = null;
+        this.previews.Clear();
     }
 
     /// <summary>
     /// Cancels this dialog.
     /// </summary>
+    /// <remarks>It does nothing to a dialog that is already closed.</remarks>
     public void Cancel()
     {
-        this.tcs.SetCanceled();
+        this.tcs.TrySetCanceled();
         ImGui.GetIO().WantCaptureKeyboard = false;
         ImGui.GetIO().WantTextInput = false;
     }
@@ -308,10 +304,19 @@ public sealed class SingleFontChooserDialog : IDisposable
     /// <summary>
     /// Draws this dialog.
     /// </summary>
+    /// <remarks>A closed dialog draws nothing.</remarks>
     public void Draw()
     {
         const float popupMinWidth = 320;
         const float popupMinHeight = 240;
+
+        if (this.tcs.Task.IsCompleted)
+            return;
+        if (this.fontFamilies is { IsCompletedSuccessfully: true, Result: var families } &&
+            families != this.appliedFamilies)
+        {
+            this.ApplyRefresh(families);
+        }
 
         ImGui.GetIO().WantCaptureKeyboard = true;
         ImGui.GetIO().WantTextInput = true;
@@ -450,11 +455,36 @@ public sealed class SingleFontChooserDialog : IDisposable
         return MathF.Sqrt((xoff * xoff) + (yoff * yoff));
     }
 
+    // The faces of a family, or none if they cannot be read, as for a family uninstalled since it was listed.
+    private static IReadOnlyList<IFontId> FontsOf(IFontFamilyId family)
+    {
+        try
+        {
+            return family.Fonts;
+        }
+        catch (Exception e)
+        {
+            Log.Warning(e, "Failed to list the fonts of {Family}", family);
+            return EmptyIFontList;
+        }
+    }
+
+    // The face a family row previews in. Kept, as finding it lists and sorts the faces.
+    private IFontId? PreviewFontOf(IFontFamilyId family)
+    {
+        ref var font = ref CollectionsMarshal.GetValueRefOrAddDefault(this.previewFonts, family, out var exists);
+        if (!exists)
+            font = FontsOf(family) is { Count: > 0 } fonts ? fonts[family.FindBestMatch(FontStyle.Default)] : null;
+        return font;
+    }
+
     private void DrawChoices()
     {
         var lineHeight = ImGui.GetTextLineHeight();
+        var previewLineHeight = this.selectedFont.SizePx * this.selectedFont.LineHeight
+                                * (this.IgnorePreviewGlobalScale ? 1f : ImGuiHelpers.GlobalScale);
         var previewHeight = (ImGui.GetFrameHeightWithSpacing() - lineHeight) +
-                            Math.Max(lineHeight, this.selectedFont.LineHeightPx * 2);
+                            Math.Max(lineHeight, MathF.Round(previewLineHeight) * 2);
 
         var advancedOptionsHeight = ImGui.GetFrameHeightWithSpacing() * (this.useAdvancedOptions ? 4 : 1);
 
@@ -465,7 +495,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                 tableSize,
                 false,
                 ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
-            && ImGui.BeginTable("##table"u8, 3, ImGuiTableFlags.None))
+            && ImGui.BeginTable("##table"u8, 3))
         {
             ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, Vector4.Zero);
             ImGui.PushStyleColor(ImGuiCol.HeaderHovered, Vector4.Zero);
@@ -500,8 +530,7 @@ public sealed class SingleFontChooserDialog : IDisposable
 
             if (changed)
             {
-                this.fontHandle?.Dispose();
-                this.fontHandle = null;
+                this.requestedFont = null;
             }
 
             ImGui.PopStyleVar();
@@ -516,40 +545,28 @@ public sealed class SingleFontChooserDialog : IDisposable
         {
             if (this.DrawAdvancedOptions())
             {
-                this.fontHandle?.Dispose();
-                this.fontHandle = null;
+                this.requestedFont = null;
             }
         }
 
-        if (this.fontHandle is null)
+        if (this.requestedFont is null)
         {
-            if (this.IgnorePreviewGlobalScale)
-            {
-                this.fontHandle = this.selectedFont.CreateFontHandle(
-                    this.atlas,
-                    tk => tk.OnPreBuild(e => e.SetFontScaleMode(e.Font, FontScaleMode.UndoGlobalScale)));
-            }
-            else
-            {
-                this.fontHandle = this.selectedFont.CreateFontHandle(this.atlas);
-            }
-
+            this.requestedFont = this.selectedFont.GetFont();
             this.SelectedFontSpecChanged?.InvokeSafely(this.selectedFont);
         }
 
-        if (this.fontHandle is null)
-        {
-            ImGui.SetCursorPos(ImGui.GetCursorPos() + ImGui.GetStyle().FramePadding);
-            ImGui.Text("Select a font."u8);
-        }
-        else if (this.fontHandle.LoadException is { } loadException)
+        // The font shown stays until the next one is loaded, so that sliders do not make the preview flicker.
+        if (this.requestedFont.LoadTask.IsCompleted)
+            this.shownFont = this.requestedFont;
+
+        if (this.shownFont?.Entry.Exception is { } loadException)
         {
             ImGui.SetCursorPos(ImGui.GetCursorPos() + ImGui.GetStyle().FramePadding);
             ImGui.PushStyleColor(ImGuiCol.Text, ImGuiColors.ErrorForeground);
             ImGui.Text(loadException.Message);
             ImGui.PopStyleColor();
         }
-        else if (!this.fontHandle.Available)
+        else if (this.shownFont is null)
         {
             ImGui.SetCursorPos(ImGui.GetCursorPos() + ImGui.GetStyle().FramePadding);
             ImGui.Text("Loading font..."u8);
@@ -557,7 +574,11 @@ public sealed class SingleFontChooserDialog : IDisposable
         else
         {
             ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-            using (this.fontHandle?.Push())
+
+            var shownSizePx = this.shownFont.Spec.SizePx;
+            var unscaled = this.IgnorePreviewGlobalScale && shownSizePx > 0;
+            using (this.shownFont.Push(
+                       unscaled ? shownSizePx / Math.Max(ImGuiHelpers.GlobalScale, float.Epsilon) : null))
             {
                 ImGui.InputTextMultiline(
                     "##fontPreviewText"u8,
@@ -567,7 +588,7 @@ public sealed class SingleFontChooserDialog : IDisposable
         }
     }
 
-    private unsafe bool DrawFamilyListColumn()
+    private bool DrawFamilyListColumn()
     {
         if (this.fontFamilies?.IsCompleted is not true)
         {
@@ -583,7 +604,8 @@ public sealed class SingleFontChooserDialog : IDisposable
             return false;
         }
 
-        var families = this.fontFamilies.Result;
+        // The indices are of the applied list. A list that completed during this frame is applied in the next.
+        var families = this.appliedFamilies ?? this.fontFamilies.Result;
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
 
         if (this.setFocusOn == 0)
@@ -598,7 +620,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                 ref this.familySearch,
                 255,
                 ImGuiInputTextFlags.AutoSelectAll | ImGuiInputTextFlags.CallbackHistory,
-                (ref ImGuiInputTextCallbackData data) =>
+                (ref data) =>
                 {
                     if (families.Count == 0)
                         return 0;
@@ -623,7 +645,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                         {
                             ImGuiHelpers.SetTextFromCallback(
                                 ref data,
-                                this.ExtractName(families[this.selectedFamilyIndex]));
+                                this.ExtractName(families[this.selectedFamilyIndex].Name));
                         }
                     }
                     else
@@ -633,13 +655,13 @@ public sealed class SingleFontChooserDialog : IDisposable
                             case ImGuiKey.DownArrow:
                                 this.selectedFamilyIndex = families.FindIndex(
                                     baseIndex + 1,
-                                    x => this.TestName(x, this.familySearch));
+                                    x => this.TestName(x.Name, this.familySearch));
                                 if (this.selectedFamilyIndex < 0)
                                 {
                                     this.selectedFamilyIndex = families.FindIndex(
                                         0,
                                         baseIndex + 1,
-                                        x => this.TestName(x, this.familySearch));
+                                        x => this.TestName(x.Name, this.familySearch));
                                 }
 
                                 changed = true;
@@ -649,7 +671,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                                 {
                                     this.selectedFamilyIndex = families.FindLastIndex(
                                         baseIndex - 1,
-                                        x => this.TestName(x, this.familySearch));
+                                        x => this.TestName(x.Name, this.familySearch));
                                 }
 
                                 if (this.selectedFamilyIndex < 0)
@@ -659,7 +681,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                                     this.selectedFamilyIndex = families.FindLastIndex(
                                         families.Count - 1,
                                         families.Count - baseIndex,
-                                        x => this.TestName(x, this.familySearch));
+                                        x => this.TestName(x.Name, this.familySearch));
                                 }
 
                                 changed = true;
@@ -672,7 +694,7 @@ public sealed class SingleFontChooserDialog : IDisposable
         {
             if (!string.IsNullOrWhiteSpace(this.familySearch) && !changed)
             {
-                this.selectedFamilyIndex = families.FindIndex(x => this.TestName(x, this.familySearch));
+                this.selectedFamilyIndex = families.FindIndex(x => this.TestName(x.Name, this.familySearch));
                 changed = true;
             }
         }
@@ -701,13 +723,11 @@ public sealed class SingleFontChooserDialog : IDisposable
                     }
 
                     var selected = this.selectedFamilyIndex == i;
-                    if (ImGui.Selectable(
-                            this.ExtractName(families[i]),
-                            ref selected,
-                            ImGuiSelectableFlags.NoAutoClosePopups))
+                    var preview = this.PreviewFontOf(families[i]);
+                    if (this.previews.Selectable(i, preview, this.ExtractName(families[i].Name), ref selected))
                     {
-                        this.selectedFamilyIndex = families.IndexOf(families[i]);
-                        this.familySearch = this.ExtractName(families[i]);
+                        this.selectedFamilyIndex = i;
+                        this.familySearch = this.ExtractName(families[i].Name);
                         this.setFocusOn = 0;
                         changed = true;
                     }
@@ -720,19 +740,22 @@ public sealed class SingleFontChooserDialog : IDisposable
         if (changed && this.selectedFamilyIndex >= 0)
         {
             var family = families[this.selectedFamilyIndex];
-            using var matchingFont = default(ComPtr<IDWriteFont>);
-            this.selectedFontIndex = family.FindBestMatch(
-                this.selectedFontWeight,
-                this.selectedFontStretch,
-                this.selectedFontStyle);
-            this.selectedFont = this.selectedFont with { FontId = family.Fonts[this.selectedFontIndex] };
+            if (FontsOf(family) is { Count: > 0 } familyFonts)
+            {
+                this.selectedFontIndex = family.FindBestMatch(this.selectedFontStyle);
+                this.selectedFont = this.selectedFont with { FontId = familyFonts[this.selectedFontIndex] };
+            }
+            else
+            {
+                this.selectedFontIndex = -1;
+            }
         }
 
         ImGui.EndChild();
         return changed;
     }
 
-    private unsafe bool DrawFontListColumn(bool changed)
+    private bool DrawFontListColumn(bool changed)
     {
         if (this.fontFamilies?.IsCompleted is not true)
         {
@@ -746,12 +769,13 @@ public sealed class SingleFontChooserDialog : IDisposable
             return changed;
         }
 
-        var families = this.fontFamilies.Result;
+        // The indices are of the applied list. A list that completed during this frame is applied in the next.
+        var families = this.appliedFamilies ?? this.fontFamilies.Result;
         var family = this.selectedFamilyIndex >= 0
                      && this.selectedFamilyIndex < families.Count
                          ? families[this.selectedFamilyIndex]
                          : null;
-        var fonts = family?.Fonts ?? EmptyIFontList;
+        var fonts = family is null ? EmptyIFontList : FontsOf(family);
 
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
 
@@ -766,7 +790,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                 ref this.fontSearch,
                 255,
                 ImGuiInputTextFlags.AutoSelectAll | ImGuiInputTextFlags.CallbackHistory,
-                (ref ImGuiInputTextCallbackData data) =>
+                (ref data) =>
                 {
                     if (fonts.Count == 0)
                         return 0;
@@ -790,7 +814,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                         {
                             ImGuiHelpers.SetTextFromCallback(
                                 ref data,
-                                this.ExtractName(fonts[this.selectedFontIndex]));
+                                this.ExtractName(fonts[this.selectedFontIndex].Name));
                         }
                     }
                     else
@@ -800,13 +824,13 @@ public sealed class SingleFontChooserDialog : IDisposable
                             case ImGuiKey.DownArrow:
                                 this.selectedFontIndex = fonts.FindIndex(
                                     baseIndex + 1,
-                                    x => this.TestName(x, this.fontSearch));
+                                    x => this.TestName(x.Name, this.fontSearch));
                                 if (this.selectedFontIndex < 0)
                                 {
                                     this.selectedFontIndex = fonts.FindIndex(
                                         0,
                                         baseIndex + 1,
-                                        x => this.TestName(x, this.fontSearch));
+                                        x => this.TestName(x.Name, this.fontSearch));
                                 }
 
                                 changed = true;
@@ -816,7 +840,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                                 {
                                     this.selectedFontIndex = fonts.FindLastIndex(
                                         baseIndex - 1,
-                                        x => this.TestName(x, this.fontSearch));
+                                        x => this.TestName(x.Name, this.fontSearch));
                                 }
 
                                 if (this.selectedFontIndex < 0)
@@ -826,7 +850,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                                     this.selectedFontIndex = fonts.FindLastIndex(
                                         fonts.Count - 1,
                                         fonts.Count - baseIndex,
-                                        x => this.TestName(x, this.fontSearch));
+                                        x => this.TestName(x.Name, this.fontSearch));
                                 }
 
                                 changed = true;
@@ -839,7 +863,7 @@ public sealed class SingleFontChooserDialog : IDisposable
         {
             if (!string.IsNullOrWhiteSpace(this.fontSearch) && !changed)
             {
-                this.selectedFontIndex = fonts.FindIndex(x => this.TestName(x, this.fontSearch));
+                this.selectedFontIndex = fonts.FindIndex(x => this.TestName(x.Name, this.fontSearch));
                 changed = true;
             }
         }
@@ -868,13 +892,10 @@ public sealed class SingleFontChooserDialog : IDisposable
                     }
 
                     var selected = this.selectedFontIndex == i;
-                    if (ImGui.Selectable(
-                            this.ExtractName(fonts[i]),
-                            ref selected,
-                            ImGuiSelectableFlags.NoAutoClosePopups))
+                    if (this.previews.Selectable(i, fonts[i], this.ExtractName(fonts[i].Name), ref selected))
                     {
-                        this.selectedFontIndex = fonts.IndexOf(fonts[i]);
-                        this.fontSearch = this.ExtractName(fonts[i]);
+                        this.selectedFontIndex = i;
+                        this.fontSearch = this.ExtractName(fonts[i].Name);
                         this.setFocusOn = 1;
                         changed = true;
                     }
@@ -886,33 +907,20 @@ public sealed class SingleFontChooserDialog : IDisposable
 
         ImGui.EndChild();
 
-        if (changed && family is not null && this.selectedFontIndex >= 0)
+        if (changed && family is not null && this.selectedFontIndex >= 0 && this.selectedFontIndex < fonts.Count)
         {
-            var font = family.Fonts[this.selectedFontIndex];
-            this.selectedFontWeight = font.Weight;
-            this.selectedFontStretch = font.Stretch;
+            var font = fonts[this.selectedFontIndex];
             this.selectedFontStyle = font.Style;
-            int fontNo = 0;
-            if (family is DalamudAssetFontAndFamilyId { Asset: DalamudAsset.NotoSansCjkRegular or DalamudAsset.NotoSansCjkMedium })
-            {
-                var dalamudConfiguration = Service<DalamudConfiguration>.Get();
-                fontNo = dalamudConfiguration.EffectiveLanguage switch
-                {
-                    "jp" => 0,
-                    "tw" => 1,
-                    "zh" => 2,
-                    "ko" => 3,
-                    _ => 0,
-                };
-            }
 
-            this.selectedFont = this.selectedFont with { FontId = font, FontNo = fontNo };
+            // The first face of a collection. The locale of the spec picks the glyph forms, such as of the faces of
+            // Noto Sans CJK for each language.
+            this.selectedFont = this.selectedFont with { FontId = font, FontNo = 0 };
         }
 
         return changed;
     }
 
-    private unsafe bool DrawSizeListColumn()
+    private bool DrawSizeListColumn()
     {
         var changed = false;
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -929,7 +937,7 @@ public sealed class SingleFontChooserDialog : IDisposable
                 255,
                 ImGuiInputTextFlags.AutoSelectAll | ImGuiInputTextFlags.CallbackHistory |
                 ImGuiInputTextFlags.CharsDecimal,
-                (ref ImGuiInputTextCallbackData data) =>
+                (ref data) =>
                 {
                     switch (data.EventKey)
                     {
@@ -1033,7 +1041,7 @@ public sealed class SingleFontChooserDialog : IDisposable
         labelWidth = Math.Max(labelWidth, ImGui.CalcTextSize("Line Height:"u8).X);
         labelWidth += ImGui.GetStyle().FramePadding.X;
 
-        var inputWidth = ImGui.CalcTextSize("000.000"u8).X + (ImGui.GetStyle().FramePadding.X * 2);
+        var inputWidth = ImGui.CalcTextSize("-000.00 px"u8).X * 2;
         ImGui.TableSetupColumn(
             "##inputLabelColumn"u8,
             ImGuiTableColumnFlags.WidthFixed,
@@ -1051,35 +1059,28 @@ public sealed class SingleFontChooserDialog : IDisposable
             ImGuiTableColumnFlags.WidthStretch,
             1f);
 
+        // The size is always in pixels, as the setter of SelectedFont and the size list make it.
+        var em = this.selectedFont.SizePx;
+        const string lengthFormat = "%.1f px";
+
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
         ImGui.AlignTextToFramePadding();
         ImGui.Text("Offset:"u8);
 
         ImGui.TableNextColumn();
-        if (FloatInputText(
-                "##glyphOffsetXInput",
-                ref this.advUiState.OffsetXText,
-                this.selectedFont.GlyphOffset.X) is { } newGlyphOffsetX)
+        var offset = this.selectedFont.GlyphOffset;
+        if (Slider("##glyphOffsetX"u8, ref offset.X, -0.5f * em, 0.5f * em, lengthFormat))
         {
             changed = true;
-            this.selectedFont = this.selectedFont with
-            {
-                GlyphOffset = this.selectedFont.GlyphOffset with { X = newGlyphOffsetX },
-            };
+            this.selectedFont = this.selectedFont with { GlyphOffset = offset };
         }
 
         ImGui.TableNextColumn();
-        if (FloatInputText(
-                "##glyphOffsetYInput",
-                ref this.advUiState.OffsetYText,
-                this.selectedFont.GlyphOffset.Y) is { } newGlyphOffsetY)
+        if (Slider("##glyphOffsetY"u8, ref offset.Y, -0.5f * em, 0.5f * em, lengthFormat))
         {
             changed = true;
-            this.selectedFont = this.selectedFont with
-            {
-                GlyphOffset = this.selectedFont.GlyphOffset with { Y = newGlyphOffsetY },
-            };
+            this.selectedFont = this.selectedFont with { GlyphOffset = offset };
         }
 
         ImGui.TableNextRow();
@@ -1088,13 +1089,11 @@ public sealed class SingleFontChooserDialog : IDisposable
         ImGui.Text("Letter Spacing:"u8);
 
         ImGui.TableNextColumn();
-        if (FloatInputText(
-                "##letterSpacingXInput",
-                ref this.advUiState.LetterSpacingText,
-                this.selectedFont.LetterSpacing) is { } newLetterSpacing)
+        var letterSpacing = this.selectedFont.LetterSpacing;
+        if (Slider("##letterSpacing"u8, ref letterSpacing, -0.25f * em, 0.5f * em, lengthFormat))
         {
             changed = true;
-            this.selectedFont = this.selectedFont with { LetterSpacing = newLetterSpacing };
+            this.selectedFont = this.selectedFont with { LetterSpacing = letterSpacing };
         }
 
         ImGui.TableNextRow();
@@ -1103,75 +1102,27 @@ public sealed class SingleFontChooserDialog : IDisposable
         ImGui.Text("Line Height:"u8);
 
         ImGui.TableNextColumn();
-        if (FloatInputText(
-                "##lineHeightInput",
-                ref this.advUiState.LineHeightText,
-                this.selectedFont.LineHeight,
-                0.05f,
-                0.1f,
-                3f) is { } newLineHeight)
+        var lineHeight = this.selectedFont.LineHeight;
+        if (Slider("##lineHeight"u8, ref lineHeight, 0.8f, 2f, "%.2fx"))
         {
             changed = true;
-            this.selectedFont = this.selectedFont with { LineHeight = newLineHeight };
+            this.selectedFont = this.selectedFont with { LineHeight = Math.Clamp(lineHeight, 0.5f, 3f) };
         }
 
         ImGui.EndTable();
         return changed;
 
-        static unsafe float? FloatInputText(
-            string label, ref string buf, float value, float step = 1f, float min = -127, float max = 127)
+        static bool Slider(ImU8String label, ref float value, float min, float max, ImU8String format)
         {
-            var stylePushed = value < min || value > max || !float.TryParse(buf, out _);
-            if (stylePushed)
-                ImGui.PushStyleColor(ImGuiCol.Text, ImGuiColors.ErrorForeground);
-
-            var changed2 = false;
             ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-            var changed1 = ImGui.InputText(
-                label,
-                ref buf,
-                255,
-                ImGuiInputTextFlags.AutoSelectAll | ImGuiInputTextFlags.CallbackHistory |
-                ImGuiInputTextFlags.CharsDecimal,
-                (ref ImGuiInputTextCallbackData data) =>
-                {
-                    switch (data.EventKey)
-                    {
-                        case ImGuiKey.DownArrow:
-                            changed2 = true;
-                            value = Math.Min(max, (MathF.Round(value / step) * step) + step);
-                            ImGuiHelpers.SetTextFromCallback(ref data, $"{value:0.##}");
-                            break;
-                        case ImGuiKey.UpArrow:
-                            changed2 = true;
-                            value = Math.Max(min, (MathF.Round(value / step) * step) - step);
-                            ImGuiHelpers.SetTextFromCallback(ref data, $"{value:0.##}");
-                            break;
-                    }
-
-                    return 0;
-                });
-
-            if (stylePushed)
-                ImGui.PopStyleColor();
-
-            if (!changed1 && !changed2)
-                return null;
-
-            if (!float.TryParse(buf, out var parsed))
-                return null;
-
-            if (min > parsed || parsed > max)
-                return null;
-
-            return parsed;
+            return ImGui.SliderFloat(label, ref value, min, max, format);
         }
     }
 
     private void DrawActionButtons(Vector2 buttonSize)
     {
-        if (this.fontHandle?.Available is not true
-            || this.FontFamilyExcludeFilter?.Invoke(this.selectedFont.FontId.Family) is true)
+        if (this.requestedFont is not { LoadTask.IsCompletedSuccessfully: true }
+            || this.FontFamilyExcludeFilter?.Invoke(this.selectedFont.FontId!.Family) is true)
         {
             ImGui.BeginDisabled();
             ImGui.Button("OK"u8, buttonSize);
@@ -1179,7 +1130,7 @@ public sealed class SingleFontChooserDialog : IDisposable
         }
         else if (ImGui.Button("OK"u8, buttonSize))
         {
-            this.tcs.SetResult(this.selectedFont);
+            this.tcs.TrySetResult(this.selectedFont);
         }
 
         if (ImGui.Button("Cancel"u8, buttonSize))
@@ -1203,30 +1154,25 @@ public sealed class SingleFontChooserDialog : IDisposable
 
         if (doRefresh)
         {
+            // The list is made in the background. Draw applies it to the selection.
             this.fontFamilies =
                 this.fontFamilies?.ContinueWith(_ => RefreshBody())
                 ?? Task.Run(RefreshBody);
-            this.fontFamilies.ContinueWith(_ => this.firstDrawAfterRefresh = true);
 
             List<IFontFamilyId> RefreshBody()
             {
-                var familyName = this.selectedFont.FontId.Family.ToString() ?? string.Empty;
-                var fontName = this.selectedFont.FontId.ToString() ?? string.Empty;
-
                 var newFonts = new List<IFontFamilyId> { DalamudDefaultFontAndFamilyId.Instance };
                 newFonts.AddRange(IFontFamilyId.ListDalamudFonts());
                 newFonts.AddRange(IFontFamilyId.ListGameFonts());
                 var systemFonts = IFontFamilyId.ListSystemFonts(!isFirst);
                 systemFonts.Sort(
                     (a, b) => string.Compare(
-                        this.ExtractName(a),
-                        this.ExtractName(b),
+                        this.ExtractName(a.Name),
+                        this.ExtractName(b.Name),
                         StringComparison.CurrentCultureIgnoreCase));
                 newFonts.AddRange(systemFonts);
                 if (this.FontFamilyExcludeFilter is not null)
                     newFonts.RemoveAll(this.FontFamilyExcludeFilter);
-
-                this.UpdateSelectedFamilyAndFontIndices(newFonts, familyName, fontName);
                 return newFonts;
             }
         }
@@ -1238,15 +1184,28 @@ public sealed class SingleFontChooserDialog : IDisposable
                 this.selectedFont = this.selectedFont with
                 {
                     LineHeight = 1f,
-                    GlyphOffset = default,
-                    LetterSpacing = default,
+                    GlyphOffset = Vector2.Zero,
+                    LetterSpacing = 0,
                 };
 
-                this.advUiState = new(this.selectedFont);
-                this.fontHandle?.Dispose();
-                this.fontHandle = null;
+                this.requestedFont = null;
             }
         }
+    }
+
+    // Applies a refreshed list of families to the selection, on the main thread.
+    private void ApplyRefresh(List<IFontFamilyId> families)
+    {
+        this.appliedFamilies = families;
+        this.previewFonts.Clear();
+        var id = this.selectedFont.FontId!;
+        this.UpdateSelectedFamilyAndFontIndices(
+            families,
+            id.Family.ToString() ?? string.Empty,
+            id.ToString() ?? string.Empty);
+        if (!Equals(this.selectedFont.FontId, id))
+            this.requestedFont = null;
+        this.firstDrawAfterRefresh = true;
     }
 
     private void UpdateSelectedFamilyAndFontIndices(
@@ -1254,53 +1213,30 @@ public sealed class SingleFontChooserDialog : IDisposable
         string familyName,
         string fontName)
     {
+        this.selectedFontIndex = -1;
         this.selectedFamilyIndex = fonts.FindIndex(x => x.ToString() == familyName);
         if (this.selectedFamilyIndex == -1)
+            return;
+
+        var familyFonts = FontsOf(fonts[this.selectedFamilyIndex]);
+        if (familyFonts.Count == 0)
+            return;
+        for (var i = 0; i < familyFonts.Count; i++)
         {
-            this.selectedFontIndex = -1;
-        }
-        else
-        {
-            this.selectedFontIndex = -1;
-            var family = fonts[this.selectedFamilyIndex];
-            for (var i = 0; i < family.Fonts.Count; i++)
+            if (familyFonts[i].ToString() == fontName)
             {
-                if (family.Fonts[i].ToString() == fontName)
-                {
-                    this.selectedFontIndex = i;
-                    break;
-                }
+                this.selectedFontIndex = i;
+                break;
             }
-
-            if (this.selectedFontIndex == -1)
-                this.selectedFontIndex = 0;
-            this.selectedFont = this.selectedFont with
-            {
-                FontId = fonts[this.selectedFamilyIndex].Fonts[this.selectedFontIndex],
-            };
         }
+
+        if (this.selectedFontIndex == -1)
+            this.selectedFontIndex = 0;
+        this.selectedFont = this.selectedFont with { FontId = familyFonts[this.selectedFontIndex] };
     }
 
-    private string ExtractName(IObjectWithLocalizableName what) =>
-        what.GetLocalizedName(Service<DalamudConfiguration>.Get().EffectiveLanguage);
-    // Note: EffectiveLanguage can be incorrect but close enough for now
+    private string ExtractName(LocalizedName name) => name.Get(Service<FontFactory>.Get().InferredLocale);
 
-    private bool TestName(IObjectWithLocalizableName what, string search) =>
-        this.ExtractName(what).Contains(search, StringComparison.CurrentCultureIgnoreCase);
-
-    private struct AdvancedOptionsUiState
-    {
-        public string OffsetXText;
-        public string OffsetYText;
-        public string LetterSpacingText;
-        public string LineHeightText;
-
-        public AdvancedOptionsUiState(SingleFontSpec spec)
-        {
-            this.OffsetXText = $"{spec.GlyphOffset.X:0.##}";
-            this.OffsetYText = $"{spec.GlyphOffset.Y:0.##}";
-            this.LetterSpacingText = $"{spec.LetterSpacing:0.##}";
-            this.LineHeightText = $"{spec.LineHeight:0.##}";
-        }
-    }
+    private bool TestName(LocalizedName name, string search) =>
+        this.ExtractName(name).Contains(search, StringComparison.CurrentCultureIgnoreCase);
 }
