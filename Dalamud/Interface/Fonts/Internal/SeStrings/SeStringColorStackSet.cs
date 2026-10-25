@@ -1,211 +1,140 @@
-using System.Buffers.Binary;
 using System.Collections.Generic;
-
-using Dalamud.Excel.Sheets;
 
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.Text;
 
-using Lumina.Excel;
 using Lumina.Text.Expressions;
 using Lumina.Text.Payloads;
 using Lumina.Text.ReadOnly;
 
 namespace Dalamud.Interface.Fonts.Internal.SeStrings;
 
-/// <summary>Color stacks to use while evaluating a SeString.</summary>
+/// <summary>Color stacks to use while reading a SeString.</summary>
 internal sealed class SeStringColorStackSet
 {
-    /// <summary>Foreground color stack while evaluating a SeString for rendering.</summary>
-    /// <remarks>Touched only from the main thread.</remarks>
     private readonly List<uint> colorStack = [];
-
-    /// <summary>Edge/border color stack while evaluating a SeString for rendering.</summary>
-    /// <remarks>Touched only from the main thread.</remarks>
     private readonly List<uint> edgeColorStack = [];
-
-    /// <summary>Shadow color stack while evaluating a SeString for rendering.</summary>
-    /// <remarks>Touched only from the main thread.</remarks>
     private readonly List<uint> shadowColorStack = [];
 
-    /// <summary>Initializes a new instance of the <see cref="SeStringColorStackSet"/> class.</summary>
-    /// <param name="uiColor">UIColor sheet.</param>
-    public unsafe SeStringColorStackSet(ExcelSheet<UIColor> uiColor)
-    {
-        var maxId = 0;
-        foreach (var row in uiColor)
-            maxId = (int)Math.Max(row.RowId, maxId);
-
-        this.ColorTypes = new uint[maxId + 1, 9];
-        foreach (var row in uiColor)
-        {
-            // Contains ABGR.
-            this.ColorTypes[row.RowId, 0] = row.Dark;
-            this.ColorTypes[row.RowId, 1] = row.Light;
-            this.ColorTypes[row.RowId, 2] = row.ClassicFF;
-            this.ColorTypes[row.RowId, 3] = row.ClearBlue;
-            this.ColorTypes[row.RowId, 5] = row.ClearWhite;
-            this.ColorTypes[row.RowId, 6] = row.ClearGreen;
-            this.ColorTypes[row.RowId, 7] = row.ClearGrey;
-            this.ColorTypes[row.RowId, 8] = row.ClearPink;
-        }
-
-        if (BitConverter.IsLittleEndian)
-        {
-            // ImGui wants RGBA in LE.
-            fixed (uint* p = this.ColorTypes)
-            {
-                foreach (ref var r in new Span<uint>(p, this.ColorTypes.GetLength(0) * this.ColorTypes.GetLength(1)))
-                    r = BinaryPrimitives.ReverseEndianness(r);
-            }
-        }
-    }
+    // The colors to use with MacroCode.ColorType and MacroCode.EdgeColorType, by type and theme.
+    private readonly uint[,] colorTypes;
 
     /// <summary>Initializes a new instance of the <see cref="SeStringColorStackSet"/> class.</summary>
-    /// <param name="colorTypes">Color types.</param>
-    public SeStringColorStackSet(uint[,] colorTypes) => this.ColorTypes = colorTypes;
+    /// <param name="colorTypes">Colors to use with <see cref="MacroCode.ColorType"/> and
+    /// <see cref="MacroCode.EdgeColorType"/>.</param>
+    /// <seealso cref="SeStringGameData.ColorTypesOf"/>
+    public SeStringColorStackSet(uint[,] colorTypes) => this.colorTypes = colorTypes;
+
+    /// <summary>Gets the current text color. 0 is the color the text is drawn with.</summary>
+    public uint Color => this.colorStack[^1];
+
+    /// <summary>Gets the current edge color.</summary>
+    public uint EdgeColor => this.edgeColorStack[^1];
+
+    /// <summary>Gets the current shadow color.</summary>
+    public uint ShadowColor => this.shadowColorStack[^1];
 
     /// <summary>Gets a value indicating whether at least one color has been pushed to the edge color stack.</summary>
-    public bool HasAdditionalEdgeColor { get; private set; }
+    public bool HasAdditionalEdgeColor => this.edgeColorStack.Count > 1;
 
-    /// <summary>Gets the parsed <see cref="UIColor"/> containing colors to use with <see cref="MacroCode.ColorType"/>
-    /// and <see cref="MacroCode.EdgeColorType"/>.</summary>
-    public uint[,] ColorTypes { get; }
-
-    /// <summary>Resets the colors in the stack.</summary>
-    /// <param name="drawState">Draw state.</param>
-    internal void Initialize(scoped ref SeStringDrawState drawState)
+    /// <summary>Resets the stacks to the colors the text starts with.</summary>
+    /// <param name="color">The text color.</param>
+    /// <param name="edgeColor">The edge color.</param>
+    /// <param name="shadowColor">The shadow color.</param>
+    public void Initialize(uint color, uint edgeColor, uint shadowColor)
     {
         this.colorStack.Clear();
         this.edgeColorStack.Clear();
         this.shadowColorStack.Clear();
-        this.colorStack.Add(drawState.Color);
-        this.edgeColorStack.Add(drawState.EdgeColor);
-        this.shadowColorStack.Add(drawState.ShadowColor);
-        drawState.Color = ColorHelpers.ApplyOpacity(drawState.Color, drawState.Opacity);
-        drawState.EdgeColor = ColorHelpers.ApplyOpacity(drawState.EdgeColor, drawState.EdgeOpacity);
-        drawState.ShadowColor = ColorHelpers.ApplyOpacity(drawState.ShadowColor, drawState.Opacity);
+        this.colorStack.Add(color);
+        this.edgeColorStack.Add(edgeColor);
+        this.shadowColorStack.Add(shadowColor);
     }
 
-    /// <summary>Handles a <see cref="MacroCode.Color"/> payload.</summary>
-    /// <param name="drawState">Draw state.</param>
-    /// <param name="payload">Payload to handle.</param>
-    internal void HandleColorPayload(scoped ref SeStringDrawState drawState, ReadOnlySePayloadSpan payload) =>
-        drawState.Color = ColorHelpers.ApplyOpacity(AdjustStack(this.colorStack, payload), drawState.Opacity);
-
-    /// <summary>Handles a <see cref="MacroCode.EdgeColor"/> payload.</summary>
-    /// <param name="drawState">Draw state.</param>
-    /// <param name="payload">Payload to handle.</param>
-    internal void HandleEdgeColorPayload(
-        scoped ref SeStringDrawState drawState,
-        ReadOnlySePayloadSpan payload)
+    /// <summary>Handles a payload that pushes or pops a color.</summary>
+    /// <param name="payload">The payload.</param>
+    /// <param name="themeIndex">The theme for <see cref="MacroCode.ColorType"/> and
+    /// <see cref="MacroCode.EdgeColorType"/>.</param>
+    /// <returns>Whether it was such a payload.</returns>
+    public bool TryHandle(ReadOnlySePayloadSpan payload, int themeIndex)
     {
-        var newColor = AdjustStack(this.edgeColorStack, payload);
-        if (!drawState.ForceEdgeColor)
-            drawState.EdgeColor = ColorHelpers.ApplyOpacity(newColor, drawState.EdgeOpacity);
-
-        this.HasAdditionalEdgeColor = this.edgeColorStack.Count > 1;
+        switch (payload.MacroCode)
+        {
+            case MacroCode.Color:
+                AdjustStack(this.colorStack, payload);
+                return true;
+            case MacroCode.EdgeColor:
+                AdjustStack(this.edgeColorStack, payload);
+                return true;
+            case MacroCode.ShadowColor:
+                AdjustStack(this.shadowColorStack, payload);
+                return true;
+            case MacroCode.ColorType:
+                this.AdjustStackByType(this.colorStack, payload, themeIndex);
+                return true;
+            case MacroCode.EdgeColorType:
+                this.AdjustStackByType(this.edgeColorStack, payload, themeIndex);
+                return true;
+            default:
+                return false;
+        }
     }
 
-    /// <summary>Handles a <see cref="MacroCode.ShadowColor"/> payload.</summary>
-    /// <param name="drawState">Draw state.</param>
-    /// <param name="payload">Payload to handle.</param>
-    internal void HandleShadowColorPayload(
-        scoped ref SeStringDrawState drawState,
-        ReadOnlySePayloadSpan payload) =>
-        drawState.ShadowColor =
-            ColorHelpers.ApplyOpacity(AdjustStack(this.shadowColorStack, payload), drawState.Opacity);
-
-    /// <summary>Handles a <see cref="MacroCode.ColorType"/> payload.</summary>
-    /// <param name="drawState">Draw state.</param>
-    /// <param name="payload">Payload to handle.</param>
-    internal void HandleColorTypePayload(
-        scoped ref SeStringDrawState drawState,
-        ReadOnlySePayloadSpan payload) =>
-        drawState.Color = ColorHelpers.ApplyOpacity(
-            this.AdjustStackByType(this.colorStack, payload, drawState.ThemeIndex),
-            drawState.Opacity);
-
-    /// <summary>Handles a <see cref="MacroCode.EdgeColorType"/> payload.</summary>
-    /// <param name="drawState">Draw state.</param>
-    /// <param name="payload">Payload to handle.</param>
-    internal void HandleEdgeColorTypePayload(
-        scoped ref SeStringDrawState drawState,
-        ReadOnlySePayloadSpan payload)
+    // The first item in a stack is the color the text started with, so it is never popped.
+    private static void Pop(List<uint> rgbaStack)
     {
-        var newColor = this.AdjustStackByType(this.edgeColorStack, payload, drawState.ThemeIndex);
-        if (!drawState.ForceEdgeColor)
-            drawState.EdgeColor = ColorHelpers.ApplyOpacity(newColor, drawState.EdgeOpacity);
-
-        this.HasAdditionalEdgeColor = this.edgeColorStack.Count > 1;
+        if (rgbaStack.Count > 1)
+            rgbaStack.RemoveAt(rgbaStack.Count - 1);
     }
 
-    private static unsafe uint AdjustStack(List<uint> rgbaStack, ReadOnlySePayloadSpan payload)
+    // Color payloads have BGRA values, and ImGui expects RGBA. The opacity is ignored.
+    private static unsafe void AdjustStack(List<uint> rgbaStack, ReadOnlySePayloadSpan payload)
     {
         if (!payload.TryGetExpression(out var expr))
-            return rgbaStack[^1];
+            return;
 
-        // Color payloads have BGRA values as its parameter. ImGui expects RGBA values.
-        // Opacity component is ignored.
         if (expr.TryGetPlaceholderExpression(out var p) && p == (int)ExpressionType.StackColor)
         {
-            // First item in the stack is the color we started to draw with.
-            if (rgbaStack.Count > 1)
-                rgbaStack.RemoveAt(rgbaStack.Count - 1);
-            return rgbaStack[^1];
+            Pop(rgbaStack);
         }
-
-        if (expr.TryGetUInt(out var bgra))
+        else if (expr.TryGetUInt(out var bgra))
         {
-            // <color(0)> adds the color on the top of the stack. This makes usages like <color(gnum99)> effectively
-            // become a no-op if no value is provided.
-            if (bgra == 0)
-                rgbaStack.Add(rgbaStack[^1]);
-            else
-                rgbaStack.Add(ColorHelpers.SwapRedBlue(bgra) | 0xFF000000u);
-            return rgbaStack[^1];
+            // <color(0)> pushes the color on top of the stack again, so that <color(gnum99)> does nothing if the
+            // number is not set.
+            rgbaStack.Add(bgra == 0 ? rgbaStack[^1] : ColorHelpers.SwapRedBlue(bgra) | 0xFF000000u);
         }
-
-        if (expr.TryGetParameterExpression(out var et, out var op) &&
-            et == (int)ExpressionType.GlobalNumber &&
-            op.TryGetInt(out var i) &&
-            RaptureTextModule.Instance() is var rtm &&
-            rtm is not null &&
-            i > 0 && i <= rtm->TextModule.MacroDecoder.GlobalParameters.Count &&
-            rtm->TextModule.MacroDecoder.GlobalParameters[i - 1] is { Type: TextParameterType.Integer } gp)
+        else if (expr.TryGetParameterExpression(out var et, out var op) &&
+                 et == (int)ExpressionType.GlobalNumber &&
+                 op.TryGetInt(out var i) &&
+                 RaptureTextModule.Instance() is var rtm &&
+                 rtm is not null &&
+                 i > 0 && i <= rtm->TextModule.MacroDecoder.GlobalParameters.Count &&
+                 rtm->TextModule.MacroDecoder.GlobalParameters[i - 1] is { Type: TextParameterType.Integer } gp)
         {
             rgbaStack.Add(ColorHelpers.SwapRedBlue((uint)gp.IntValue) | 0xFF000000u);
-            return rgbaStack[^1];
         }
-
-        // Fallback value.
-        rgbaStack.Add(0xFF000000u);
-        return rgbaStack[^1];
+        else
+        {
+            rgbaStack.Add(0xFF000000u);
+        }
     }
 
-    private uint AdjustStackByType(List<uint> rgbaStack, ReadOnlySePayloadSpan payload, int themeIndex)
+    private void AdjustStackByType(List<uint> rgbaStack, ReadOnlySePayloadSpan payload, int themeIndex)
     {
-        if (!payload.TryGetExpression(out var expr))
-            return rgbaStack[^1];
-        if (!expr.TryGetUInt(out var colorTypeIndex))
-            return rgbaStack[^1];
+        if (!payload.TryGetExpression(out var expr) || !expr.TryGetUInt(out var colorTypeIndex))
+            return;
 
-        // Component::GUI::AtkFontAnalyzerBase.vf4: passing 0 will pop the color off the stack.
+        // Passing 0 pops the color off the stack, as in Component::GUI::AtkFontAnalyzerBase.vf4.
         if (colorTypeIndex == 0)
         {
-            // First item in the stack is the color we started to draw with.
-            if (rgbaStack.Count > 1)
-                rgbaStack.RemoveAt(rgbaStack.Count - 1);
-            return rgbaStack[^1];
+            Pop(rgbaStack);
+            return;
         }
 
-        // Opacity component is ignored.
-        var color = themeIndex >= 0 && themeIndex < this.ColorTypes.GetLength(1) &&
-                    colorTypeIndex < this.ColorTypes.GetLength(0)
-                        ? this.ColorTypes[colorTypeIndex, themeIndex]
+        var color = themeIndex >= 0 && themeIndex < this.colorTypes.GetLength(1) &&
+                    colorTypeIndex < this.colorTypes.GetLength(0)
+                        ? this.colorTypes[colorTypeIndex, themeIndex]
                         : 0u;
-
         rgbaStack.Add(color | 0xFF000000u);
-        return rgbaStack[^1];
     }
 }
